@@ -259,3 +259,4 @@ void ChannelCli::cmdInfo(const uint8_t* dest, bool is_ch) {
 }
 
 } // namespace ro_mesh
+

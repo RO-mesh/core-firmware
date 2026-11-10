@@ -33,3 +33,4 @@ void RegionMap::setDefaultRegion(const RegionEntry* def) {
 void RegionMap::setHomeRegion(const RegionEntry* home) {
     s_home_region = home;
 }
+

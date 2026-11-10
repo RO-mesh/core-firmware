@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RO-mesh Core Firmware | Decoupled LoRa Mesh for Romania</title>
+  <meta name="description" content="Official decoupled firmware for RO-mesh repeaters and companions based on MeshCore. Features Romanian geofencing, PA gain limiting, adaptive tiers, and T1000-E SOS.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --bg-card: #111827;
+      --bg-card-hover: #162032;
+      --border: #1f293d;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --primary: #10b981;
+      --primary-glow: rgba(16, 185, 129, 0.25);
+      --accent: #06b6d4;
+      --accent-glow: rgba(6, 182, 212, 0.25);
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --code-bg: #070a10;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Navigation */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(11, 15, 23, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 700;
+      font-size: 1.25rem;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: #051610;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+    }
+    .nav-links {
+      display: flex;
+      gap: 1.5rem;
+      align-items: center;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--primary); }
+    .btn-github {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.9rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+    .btn-github:hover {
+      border-color: var(--primary);
+      box-shadow: 0 0 15px var(--primary-glow);
+    }
+
+    /* Hero Section */
+    .hero {
+      position: relative;
+      padding: 5rem 1.5rem 4rem;
+      text-align: center;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .hero-badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--primary);
+      padding: 0.35rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+    }
+    .hero h1 {
+      font-size: 3.25rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.25rem;
+      background: linear-gradient(135deg, #ffffff 40%, var(--primary) 80%, var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: 1.2rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 2.25rem;
+    }
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #051610;
+      font-weight: 700;
+      padding: 0.75rem 1.75rem;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: all 0.2s;
+      box-shadow: 0 4px 20px var(--primary-glow);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px var(--primary-glow);
+    }
+    .btn-secondary {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 600;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover {
+      border-color: var(--text-muted);
+    }
+
+    /* Badges Ribbon */
+    .badges-ribbon {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .badge-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      padding: 0.4rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 8px var(--primary);
+    }
+
+    /* Section Styling */
+    section {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 4.5rem 1.5rem;
+    }
+    .section-header {
+      text-align: center;
+      max-width: 750px;
+      margin: 0 auto 3.5rem;
+    }
+    .section-tag {
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+      display: block;
+    }
+    .section-title {
+      font-size: 2.25rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+    .section-desc {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+
+    /* Architecture Grid */
+    .arch-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 2.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .arch-diagram {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    .arch-box {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem;
+      transition: all 0.2s;
+    }
+    .arch-box:hover {
+      border-color: var(--primary);
+      box-shadow: 0 0 20px var(--primary-glow);
+    }
+    .arch-box h3 {
+      font-size: 1.15rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .arch-box p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .code-tag {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      color: var(--accent);
+    }
+
+    /* Feature Tabs */
+    .tabs-nav {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-bottom: 2.5rem;
+    }
+    .tab-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 0.75rem 2rem;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: #051610;
+      border-color: var(--primary);
+      box-shadow: 0 4px 15px var(--primary-glow);
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem;
+      transition: all 0.2s;
+    }
+    .feature-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .feature-icon {
+      font-size: 1.75rem;
+      margin-bottom: 1rem;
+      display: inline-block;
+    }
+    .feature-card h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 0.6rem;
+    }
+    .feature-card p {
+      font-size: 0.92rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+    .feature-spec {
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+      color: var(--accent);
+    }
+
+    /* Interactive Calculator */
+    .calculator-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 2.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2.5rem;
+      align-items: center;
+    }
+    @media (max-width: 768px) {
+      .calculator-box { grid-template-columns: 1fr; }
+    }
+    .calc-controls label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      font-size: 0.95rem;
+    }
+    .slider {
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: #1f293d;
+      outline: none;
+      -webkit-appearance: none;
+      margin-bottom: 1.5rem;
+    }
+    .slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      box-shadow: 0 0 10px var(--primary);
+    }
+    .calc-display {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem;
+    }
+    .calc-tier-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 6px;
+      font-weight: 800;
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+    }
+    .t0 { background: #8b5cf6; color: #fff; }
+    .t1 { background: #3b82f6; color: #fff; }
+    .t2 { background: var(--primary); color: #051610; }
+    .t3 { background: var(--warning); color: #051610; }
+
+    /* Commands Table */
+    .command-search {
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto 2rem;
+      display: block;
+      padding: 0.85rem 1.25rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 1rem;
+      font-family: var(--font-mono);
+      outline: none;
+    }
+    .command-search:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 15px var(--primary-glow);
+    }
+    .table-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    th, td {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    th {
+      background: rgba(255, 255, 255, 0.02);
+      font-weight: 700;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    td code {
+      background: var(--code-bg);
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* Hardware Cards */
+    .hardware-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+    }
+    .board-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .board-card h3 {
+      font-size: 1.2rem;
+      margin-bottom: 0.5rem;
+    }
+    .board-role {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 1rem;
+      display: block;
+    }
+    .board-specs {
+      list-style: none;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+    }
+    .board-specs li {
+      margin-bottom: 0.4rem;
+      display: flex;
+      justify-content: space-between;
+    }
+    .board-cmd {
+      background: var(--code-bg);
+      padding: 0.6rem;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--accent);
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 3rem 1.5rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    footer a {
+      color: var(--text);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    footer a:hover { color: var(--primary); }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <header>
+    <div class="nav-container">
+      <a href="#" class="logo-container">
+        <span class="logo-badge">RO</span>
+        <span>RO-mesh Core</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#features">Subsystems</a></li>
+        <li><a href="#calculator">Timing Physics</a></li>
+        <li><a href="#commands">Commands</a></li>
+        <li><a href="#hardware">Hardware</a></li>
+      </ul>
+      <a href="https://github.com/RO-mesh/core-firmware" class="btn-github" target="_blank" rel="noopener">
+        <svg height="18" width="18" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+        </svg>
+        GitHub
+      </a>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge-pill">
+      <span>●</span> European Sub-Band CEPT Compliant (869.4–869.65 MHz)
+    </div>
+    <h1>Decoupled LoRa Firmware Built for Romania</h1>
+    <p>
+      An advanced, production-grade custom firmware for Repeaters and Companions based on MeshCore.
+      Featuring native Romanian geofencing, universal 1W power clamping, adaptive repeating delays, flood quarantine, and a conversational in-chat assistant.
+    </p>
+    <div class="hero-actions">
+      <a href="https://github.com/RO-mesh/core-firmware" class="btn-primary" target="_blank" rel="noopener">Explore Source Code</a>
+      <a href="#commands" class="btn-secondary">Command Reference</a>
+      <a href="#calculator" class="btn-secondary">Delay Calculator</a>
+    </div>
+
+    <div class="badges-ribbon">
+      <div class="badge-item"><span class="badge-dot"></span> 869.618 MHz Narrow Baseline</div>
+      <div class="badge-item"><span class="badge-dot"></span> SF8 BW 62.5 kHz CR 4/8</div>
+      <div class="badge-item"><span class="badge-dot"></span> Pristine Upstream Submodule</div>
+      <div class="badge-item"><span class="badge-dot"></span> 100% Green CI Suite</div>
+    </div>
+  </div>
+
+  <!-- Architecture Section -->
+  <section id="architecture">
+    <div class="section-header">
+      <span class="section-tag">Zero-Conflict Engineering</span>
+      <h2 class="section-title">Strictly Decoupled Architecture</h2>
+      <p class="section-desc">
+        Never modify upstream files in place. Upstream MeshCore remains an untouched Git submodule, enabling friction-free synchronized updates while preserving all custom Romanian enhancements.
+      </p>
+    </div>
+
+    <div class="arch-card">
+      <div class="arch-diagram">
+        <div class="arch-box">
+          <h3><span>📦</span> lib/MeshCore <span class="code-tag">Pristine Submodule</span></h3>
+          <p>Untouched core radio driver, state machine, encryption, and routing engine directly tracking <a href="https://github.com/meshcore-dev/MeshCore" style="color:var(--accent);">meshcore-dev/MeshCore</a>.</p>
+        </div>
+        <div class="arch-box">
+          <h3><span>⚡</span> src/ro_mesh/ <span class="code-tag">Native Extensions</span></h3>
+          <p>Clean hooks, PA gain limits, geofences, token buckets, and conversational CLI logic compiled via preprocessor feature gates.</p>
+        </div>
+        <div class="arch-box">
+          <h3><span>🎯</span> src/targets/ <span class="code-tag">Dual Profiles</span></h3>
+          <p>Dedicated entrypoints for <strong>Repeaters</strong> (infrastructure, sentry, filtering) and <strong>Companions</strong> (tactical, SOS, chat).</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features / Subsystems -->
+  <section id="features">
+    <div class="section-header">
+      <span class="section-tag">Comprehensive Capabilities</span>
+      <h2 class="section-title">Engineered for Romanian Field Realities</h2>
+      <p class="section-desc">Toggle between operational profiles to view specialized subsystems.</p>
+    </div>
+
+    <div class="tabs-nav">
+      <button class="tab-btn active" onclick="switchTab('repeater')">Repeater Infrastructure</button>
+      <button class="tab-btn" onclick="switchTab('companion')">Companion Devices</button>
+    </div>
+
+    <!-- Repeater Panel -->
+    <div id="panel-repeater" class="tab-panel active">
+      <div class="feature-card">
+        <span class="feature-icon">🇷🇴</span>
+        <h3>AutoRegionsRO</h3>
+        <p>Maps 8 macro-regions and 42 counties with centroid polygons. Parses vehicle prefixes (e.g. <code>RO-BV-01</code>) and falls back safely to national <code>#ro</code> scope.</p>
+        <div class="feature-spec">Auto-Fallback: #europe → #ro → county</div>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">⏱️</span>
+        <h3>AdaptiveTier Engine</h3>
+        <p>Implements real-world second-based delay tiers (<code>rxdelay 3.0s</code>, <code>txdelay 0.3s–2.0s</code>) with a 15-minute sliding window to prioritize strategic mountain nodes.</p>
+        <div class="feature-spec">Tier 0 (Mountain) → Tier 3 (Edge)</div>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">📶</span>
+        <h3>Universal PA Gain Limiter</h3>
+        <p>Attenuates SX1262 drive level on 1W boards (T-Beam 1W, RAK 1W) to strictly enforce the +27 dBm ERP / +22 dBm conducted legal boundary.</p>
+        <div class="feature-spec">Output = min(Target, Legal - PA Gain)</div>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">🛡️</span>
+        <h3>QuarantineEngine</h3>
+        <p>Enforces a 10% duty cycle airtime token bucket and universal 24-hour remote advert rate limiting. Rogue flooders are quarantined for 60 minutes.</p>
+        <div class="feature-spec">MAC Filter Level Dropping</div>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">🔋</span>
+        <h3>BatteryGate Hysteresis</h3>
+        <p>Protects off-grid solar repeaters. Transmit relaying suspends at 3.40V (passive receive mode) and recovers cleanly at 3.60V.</p>
+        <div class="feature-spec">Prevents Brownout Boot-Loops</div>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">📡</span>
+        <h3>RO-mesh Sentry</h3>
+        <p>Remote preset switching with single-use burned tokens and inconspicuous steganographic parsing (<code>WX:</code> weather & <code>chk</code> check-in strings).</p>
+        <div class="feature-spec">Anti-Replay Protection</div>
+      </div>
+    </div>
+
+    <!-- Companion Panel -->
+    <div id="panel-companion" class="tab-panel">
+      <div class="feature-card">
+        <span class="feature-icon">🚨</span>
+        <h3>T1000-E SOS Engine</h3>
+        <p>Double-click hardware button arms a 15-second audible countdown. A 5-second long hold disarms and cancels, eliminating conflict with factory GPS triple-clicks.</p>
+        <div class="feature-spec">Dual-Target: #sos + Direct Contacts</div>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">💬</span>
+        <h3>Virtual "System" Assistant</h3>
+        <p>Chat directly with your device firmware under the reserved contact <code>System</code>. Slash commands execute locally consuming zero RF airtime.</p>
+        <div class="feature-spec">Zero Airtime Consumption</div>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">📍</span>
+        <h3>Smart Telemetry Beacon</h3>
+        <p>Distance-triggered position beaconing (100m threshold) with 15-minute fallback. Strictly barred from broadcasting on the global <code>Public</code> channel.</p>
+        <div class="feature-spec">Automatic Map Links</div>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">📻</span>
+        <h3>Pre-Populated Channels</h3>
+        <p>Zero onboarding setup. Instantly provisions official <code>Public</code>, <code>#romania</code>, <code>#sos</code>, <code>#alerte</code>, and <code>RO-mesh T1000E CLI</code>.</p>
+        <div class="feature-spec">Official MeshCore Global PSK</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Timing Physics Calculator -->
+  <section id="calculator">
+    <div class="section-header">
+      <span class="section-tag">Physics-Accurate Timing</span>
+      <h2 class="section-title">LoRa Narrow Delay Tier Simulator</h2>
+      <p class="section-desc">
+        Narrow sub-band packets take 250–750+ ms. Millisecond delays cause total channel congestion. Move the slider to see how AdaptiveTier dynamically allocates repeating precedence.
+      </p>
+    </div>
+
+    <div class="calculator-box">
+      <div class="calc-controls">
+        <label for="density-slider">Surrounding Mesh Neighbors Heard: <span id="neighbor-count" style="color:var(--primary); font-family:var(--font-mono); font-weight:700;">1</span></label>
+        <input type="range" id="density-slider" class="slider" min="0" max="25" value="1" oninput="updateCalculator(this.value)">
+
+        <label for="snr-slider">Mean Received SNR: <span id="snr-val" style="color:var(--accent); font-family:var(--font-mono); font-weight:700;">+2.0 dB</span></label>
+        <input type="range" id="snr-slider" class="slider" min="-15" max="10" value="2" oninput="updateCalculator()">
+      </div>
+
+      <div class="calc-display">
+        <div id="tier-badge" class="calc-tier-badge t0">Tier 0: Mountain-Top Backbone</div>
+        <p id="tier-desc" style="font-size:0.95rem; color:var(--text-muted); margin-bottom:1rem;">
+          Strategic high-elevation node with wide visibility. Fires first to establish long-range county bridging before local repeaters transmit.
+        </p>
+        <div style="font-family:var(--font-mono); font-size:0.9rem; line-height:1.8;">
+          <div>RX Delay: <span id="calc-rx" style="color:var(--primary); font-weight:700;">3.0s</span></div>
+          <div>TX Delay (Jitter): <span id="calc-tx" style="color:var(--accent); font-weight:700;">2.0s</span></div>
+          <div>Precedence: <span id="calc-priority" style="color:#a78bfa; font-weight:700;">HIGHEST (Transmits First)</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Commands Reference -->
+  <section id="commands">
+    <div class="section-header">
+      <span class="section-tag">Command Cheat Sheet</span>
+      <h2 class="section-title">In-Chat & Serial Management</h2>
+      <p class="section-desc">Search commands across companion slash commands and repeater serial CLI.</p>
+    </div>
+
+    <input type="text" id="cmd-filter" class="command-search" placeholder="Search commands (/status, ban, tier, gps...)" oninput="filterCommands(this.value)">
+
+    <div class="table-container">
+      <table id="cmd-table">
+        <thead>
+          <tr>
+            <th>Interface</th>
+            <th>Command</th>
+            <th>Scope & Description</th>
+            <th>Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="code-tag">In-Chat</span></td>
+            <td><code>/help</code></td>
+            <td>Displays full companion command list</td>
+            <td><code>/help</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">In-Chat</span></td>
+            <td><code>/status</code></td>
+            <td>Diagnostics: battery %, GPS fix, active tier, PA clamp</td>
+            <td><code>/status</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">In-Chat</span></td>
+            <td><code>/tier [0-3|auto|off]</code></td>
+            <td>Inspects or overrides repeating delay tier</td>
+            <td><code>/tier auto</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">In-Chat</span></td>
+            <td><code>/sos [trigger|cancel]</code></td>
+            <td>Triggers or clears active emergency SOS beaconing</td>
+            <td><code>/sos cancel</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">In-Chat</span></td>
+            <td><code>/gps</code></td>
+            <td>Displays coordinates, altitude, sats, and Google Maps URL</td>
+            <td><code>/gps</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">In-Chat</span></td>
+            <td><code>/battery</code></td>
+            <td>Detailed LiPo voltage and percentage</td>
+            <td><code>/battery</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>get tier</code></td>
+            <td>Inspects active mode, tier index, and delay seconds</td>
+            <td><code>get tier</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>set tier &lt;0-3&gt;</code></td>
+            <td>Manually locks repeater into designated delay tier</td>
+            <td><code>set tier 0</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>set pa.limiter &lt;on|off&gt;</code></td>
+            <td>Enables or bypasses the PA power limiter</td>
+            <td><code>set pa.limiter on</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>set pa.gain &lt;dB&gt;</code></td>
+            <td>Sets hardware amplifier gain level (e.g. 14 dB)</td>
+            <td><code>set pa.gain 14</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>ban list</code></td>
+            <td>Lists all quarantined nodes and remaining timeout</td>
+            <td><code>ban list</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>ban add &lt;hex&gt; &lt;min&gt;</code></td>
+            <td>Manually puts a node public key into quarantine</td>
+            <td><code>ban add A1B2C3D4 120</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Hardware Matrix -->
+  <section id="hardware">
+    <div class="section-header">
+      <span class="section-tag">Tested Hardware</span>
+      <h2 class="section-title">Official Board Environments</h2>
+      <p class="section-desc">Ready to compile with PlatformIO out of the box.</p>
+    </div>
+
+    <div class="hardware-grid">
+      <div class="board-card">
+        <div>
+          <span class="board-role">Mobile Companion</span>
+          <h3>Seeed SenseCAP T1000-E</h3>
+          <ul class="board-specs">
+            <li><span>MCU</span> <span>Nordic nRF52840</span></li>
+            <li><span>Radio</span> <span>Semtech LR1110</span></li>
+            <li><span>GNSS</span> <span>Onboard GPS/Galileo</span></li>
+            <li><span>Sensors</span> <span>Buzzer, Button, Temp</span></li>
+          </ul>
+        </div>
+        <div class="board-cmd">pio run -e t1000e_companion</div>
+      </div>
+
+      <div class="board-card">
+        <div>
+          <span class="board-role">Urban Repeater</span>
+          <h3>Heltec LoRa32 V3</h3>
+          <ul class="board-specs">
+            <li><span>MCU</span> <span>ESP32-S3 Dual-Core</span></li>
+            <li><span>Radio</span> <span>SX1262 (Standard)</span></li>
+            <li><span>Output</span> <span>+22 dBm Conducted</span></li>
+            <li><span>Display</span> <span>0.96" OLED Included</span></li>
+          </ul>
+        </div>
+        <div class="board-cmd">pio run -e heltec_v3_repeater</div>
+      </div>
+
+      <div class="board-card">
+        <div>
+          <span class="board-role">Backbone Repeater</span>
+          <h3>RAK 1W (RAK4631 + PA)</h3>
+          <ul class="board-specs">
+            <li><span>MCU</span> <span>Nordic nRF52840</span></li>
+            <li><span>Radio</span> <span>SX1262 + 1000mW FEM</span></li>
+            <li><span>PA Gain</span> <span>+14 dB (Limiter Clamped)</span></li>
+            <li><span>Power</span> <span>Ultra-Low Solar Idle</span></li>
+          </ul>
+        </div>
+        <div class="board-cmd">pio run -e rak_1w_repeater</div>
+      </div>
+
+      <div class="board-card">
+        <div>
+          <span class="board-role">High-Power Repeater</span>
+          <h3>LilyGo T-Beam 1W</h3>
+          <ul class="board-specs">
+            <li><span>MCU</span> <span>ESP32-S3</span></li>
+            <li><span>Radio</span> <span>SX1262 + 1W Amp</span></li>
+            <li><span>GNSS</span> <span>L76K GPS Module</span></li>
+            <li><span>PA Gain</span> <span>+14 dB (Limiter Clamped)</span></li>
+          </ul>
+        </div>
+        <div class="board-cmd">pio run -e tbeam_1w_repeater</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p style="margin-bottom: 0.5rem;">
+      RO-mesh Core Firmware &bull; Official Romanian Mesh Infrastructure &bull; Licensed under GPL-3.0
+    </p>
+    <p>
+      Maintained by <a href="https://github.com/RO-mesh" target="_blank" rel="noopener">RO-mesh</a> &bull;
+      Based on <a href="https://github.com/meshcore-dev/MeshCore" target="_blank" rel="noopener">MeshCore</a>
+    </p>
+  </footer>
+
+  <script>
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      if (name === 'repeater') {
+        document.querySelector('.tab-btn:nth-child(1)').classList.add('active');
+        document.getElementById('panel-repeater').classList.add('active');
+      } else {
+        document.querySelector('.tab-btn:nth-child(2)').classList.add('active');
+        document.getElementById('panel-companion').classList.add('active');
+      }
+    }
+
+    function updateCalculator(val) {
+      const neighbors = val !== undefined ? parseInt(val) : parseInt(document.getElementById('density-slider').value);
+      const snr = parseInt(document.getElementById('snr-slider').value);
+
+      document.getElementById('neighbor-count').innerText = neighbors;
+      document.getElementById('snr-val').innerText = (snr > 0 ? '+' : '') + snr + ' dB';
+
+      const badge = document.getElementById('tier-badge');
+      const desc = document.getElementById('tier-desc');
+      const rx = document.getElementById('calc-rx');
+      const tx = document.getElementById('calc-tx');
+      const prio = document.getElementById('calc-priority');
+
+      badge.className = 'calc-tier-badge';
+
+      if (neighbors <= 2) {
+        badge.classList.add('t0');
+        badge.innerText = 'Tier 0: Mountain-Top Backbone';
+        desc.innerText = 'Strategic high-elevation node with wide visibility. Fires first to establish long-range county bridging before local repeaters transmit.';
+        rx.innerText = '3.0s';
+        tx.innerText = '2.0s';
+        prio.innerText = 'HIGHEST (Transmits First)';
+        prio.style.color = '#a78bfa';
+      } else if (neighbors <= 7 && snr > -5) {
+        badge.classList.add('t1');
+        badge.innerText = 'Tier 1: Regional Relay';
+        desc.innerText = 'High hilltop or tall structure. Relays regional traffic to fill valleys and gaps not reached by Tier 0 backbones.';
+        rx.innerText = '3.0s';
+        tx.innerText = '1.2s';
+        prio.innerText = 'HIGH (Second Wave)';
+        prio.style.color = '#60a5fa';
+      } else if (neighbors >= 10) {
+        badge.classList.add('t3');
+        badge.innerText = 'Tier 3: Dense Urban Edge';
+        desc.innerText = 'Dense city environment. Yields channel priority to prevent local repeating collisions and airtime exhaustion.';
+        rx.innerText = '3.0s';
+        tx.innerText = '0.3s';
+        prio.innerText = 'DEFERRED (Yields Channel)';
+        prio.style.color = '#fbbf24';
+      } else {
+        badge.classList.add('t2');
+        badge.innerText = 'Tier 2: Local Suburban';
+        desc.innerText = 'Standard neighborhood or suburban node providing local neighborhood fill.';
+        rx.innerText = '3.0s';
+        tx.innerText = '0.6s';
+        prio.innerText = 'BALANCED';
+        prio.style.color = '#34d399';
+      }
+    }
+
+    function filterCommands(query) {
+      const q = query.toLowerCase();
+      const rows = document.querySelectorAll('#cmd-table tbody tr');
+      rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        row.style.display = text.includes(q) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>

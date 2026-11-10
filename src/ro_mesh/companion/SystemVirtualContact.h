@@ -45,3 +45,4 @@ inline void initSystemVirtualContact(ContactInfo contacts[], int max_contacts, i
 }
 
 } // namespace ro_mesh
+

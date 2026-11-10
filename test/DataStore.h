@@ -13,3 +13,4 @@ public:
   bool getChannel(int, ChannelDetails&) { return false; }
   void saveChannel(int, const ChannelDetails&) {}
 };
+

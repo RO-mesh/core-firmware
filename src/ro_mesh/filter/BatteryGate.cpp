@@ -35,3 +35,4 @@ void BatteryGate::updateVoltage(float volts) {
 }
 
 } // namespace ro_mesh
+

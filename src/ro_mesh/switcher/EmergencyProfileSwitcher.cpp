@@ -178,3 +178,4 @@ bool EmergencyProfileSwitcher::handleCommand(const char* cmd, char* reply, size_
 }
 
 } // namespace ro_mesh
+

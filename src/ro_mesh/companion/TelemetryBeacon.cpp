@@ -138,3 +138,4 @@ void TelemetryBeacon::update(uint32_t now_ms) {
 }
 
 } // namespace ro_mesh
+

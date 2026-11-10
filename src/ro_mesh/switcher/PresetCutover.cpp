@@ -21,3 +21,4 @@ bool PresetCutover::applyPreset(uint8_t id, CommonRadioPrefs& prefs) {
 }
 
 } // namespace ro_mesh
+
