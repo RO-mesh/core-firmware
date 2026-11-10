@@ -1,4 +1,4 @@
-#include "AdaptiveTier.h"
+#include "AutomaticTiers.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -36,7 +36,7 @@ void TierBucket::addNeighbor(uint32_t node_id) {
   }
 }
 
-AdaptiveTier::AdaptiveTier()
+AutomaticTiers::AutomaticTiers()
   : _mode(TierMode::Auto),
     _active_tier(1),
     _manual_tier(1),
@@ -51,28 +51,28 @@ AdaptiveTier::AdaptiveTier()
   }
 }
 
-void AdaptiveTier::setMode(TierMode mode) {
+void AutomaticTiers::setMode(TierMode mode) {
   _mode = mode;
   if (_mode == TierMode::Manual) {
     _active_tier = _manual_tier;
   }
 }
 
-void AdaptiveTier::setManualTier(uint8_t tier) {
+void AutomaticTiers::setManualTier(uint8_t tier) {
   if (tier > 3) tier = 3;
   _manual_tier = tier;
   _mode = TierMode::Manual;
   _active_tier = _manual_tier;
 }
 
-TierDelays AdaptiveTier::getActiveDelays() const {
+TierDelays AutomaticTiers::getActiveDelays() const {
   if (_mode == TierMode::Disabled) {
     return DISABLED_TIER_DELAYS;
   }
   return STANDARD_TIER_DELAYS[_active_tier & 0x03];
 }
 
-void AdaptiveTier::recordPacket(uint32_t sender_id, float snr, bool is_duplicate, uint32_t now_ms) {
+void AutomaticTiers::recordPacket(uint32_t sender_id, float snr, bool is_duplicate, uint32_t now_ms) {
   TierBucket& b = _buckets[_active_bucket_idx];
   b.packet_count++;
   if (is_duplicate) b.duplicate_count++;
@@ -81,7 +81,7 @@ void AdaptiveTier::recordPacket(uint32_t sender_id, float snr, bool is_duplicate
   b.addNeighbor(sender_id);
 }
 
-void AdaptiveTier::loop(uint32_t now_ms) {
+void AutomaticTiers::loop(uint32_t now_ms) {
   if (_last_eval_ms == 0) {
     _last_eval_ms = now_ms;
     _buckets[_active_bucket_idx].reset(now_ms);
@@ -153,7 +153,7 @@ void AdaptiveTier::loop(uint32_t now_ms) {
   }
 }
 
-bool AdaptiveTier::handleCommand(const char* cmd, char* reply, size_t max_len) {
+bool AutomaticTiers::handleCommand(const char* cmd, char* reply, size_t max_len) {
   if (!cmd || !reply) return false;
 
   if (strcasecmp(cmd, "get tier") == 0) {

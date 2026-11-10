@@ -1,17 +1,17 @@
-#include "AutoRegionsRO.h"
+#include "AutomaticRegions.h"
 #include <string.h>
 #include <stdio.h>
 
 namespace ro_mesh {
 
-SystemNotificationCallback AutoRegionsRO::_notify_cb = nullptr;
+SystemNotificationCallback AutomaticRegions::_notify_cb = nullptr;
 
-AutoRegionsRO::AutoRegionsRO() : _initialized(false) {
+AutomaticRegions::AutomaticRegions() : _initialized(false) {
   strncpy(_active_scope, "#ro", sizeof(_active_scope) - 1);
   _active_scope[sizeof(_active_scope) - 1] = '\0';
 }
 
-void AutoRegionsRO::init(float lat, float lon, const char* node_name) {
+void AutomaticRegions::init(float lat, float lon, const char* node_name) {
   const CountyEntry* county = nullptr;
 
   if (lat != 0.0f || lon != 0.0f) {
@@ -34,7 +34,7 @@ void AutoRegionsRO::init(float lat, float lon, const char* node_name) {
   _initialized = true;
 }
 
-bool AutoRegionsRO::evaluateAndInject(RegionMap& region_map, const char* node_name, float lat, float lon) {
+bool AutomaticRegions::evaluateAndInject(RegionMap& region_map, const char* node_name, float lat, float lon) {
   const CountyEntry* county = nullptr;
 
   // 1. Try resolving via GPS coordinates if valid

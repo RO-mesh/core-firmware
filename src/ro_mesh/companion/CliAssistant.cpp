@@ -1,9 +1,9 @@
-#include "ChannelCli.h"
-#include "SystemVirtualContact.h"
-#include "DefaultChannels.h"
-#include "T1000eSos.h"
-#include "../hal/AdaptiveTier.h"
-#include "../hal/PaGainLimiter.h"
+#include "CliAssistant.h"
+#include "CliContact.h"
+#include "RomanianChannels.h"
+#include "SosT1000e.h"
+#include "../hal/AutomaticTiers.h"
+#include "../hal/GainEngine.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -11,12 +11,12 @@
 
 namespace ro_mesh {
 
-ChannelCli& ChannelCli::instance() {
-    static ChannelCli inst;
+CliAssistant& CliAssistant::instance() {
+    static CliAssistant inst;
     return inst;
 }
 
-ChannelCli::ChannelCli()
+CliAssistant::CliAssistant()
     : _inject_cb(nullptr),
       _welcome_sent(false),
       _battery_pct(100),
@@ -28,11 +28,11 @@ ChannelCli::ChannelCli()
       _sats(0) {
 }
 
-void ChannelCli::init() {
+void CliAssistant::init() {
     _welcome_sent = false;
 }
 
-bool ChannelCli::handleMessage(const uint8_t* destination_id, bool is_channel, const char* text) {
+bool CliAssistant::handleMessage(const uint8_t* destination_id, bool is_channel, const char* text) {
     if (!text || strlen(text) == 0) {
         return false;
     }
@@ -67,7 +67,7 @@ bool ChannelCli::handleMessage(const uint8_t* destination_id, bool is_channel, c
     return true; // Intercepted locally, do NOT transmit over RF
 }
 
-void ChannelCli::sendWelcomeNotice(const uint8_t* destination_id, bool is_channel) {
+void CliAssistant::sendWelcomeNotice(const uint8_t* destination_id, bool is_channel) {
     const char* welcome_msg = 
         "👋 Welcome to RO-mesh! I am your System companion assistant.\n"
         "Type /help to see all available commands and manage your device directly from chat with zero RF airtime.";
@@ -77,7 +77,7 @@ void ChannelCli::sendWelcomeNotice(const uint8_t* destination_id, bool is_channe
     _welcome_sent = true;
 }
 
-void ChannelCli::postSystemNotification(const char* message, const uint8_t* destination_id, bool is_channel) {
+void CliAssistant::postSystemNotification(const char* message, const uint8_t* destination_id, bool is_channel) {
     if (!message) return;
 
     char buffer[256];
@@ -87,13 +87,13 @@ void ChannelCli::postSystemNotification(const char* message, const uint8_t* dest
     sendReply(target, is_channel, buffer);
 }
 
-void ChannelCli::sendReply(const uint8_t* dest, bool is_ch, const char* reply) {
+void CliAssistant::sendReply(const uint8_t* dest, bool is_ch, const char* reply) {
     if (_inject_cb) {
         _inject_cb(dest, is_ch, reply);
     }
 }
 
-void ChannelCli::executeCommand(const char* cmd_line, const uint8_t* destination_id, bool is_channel) {
+void CliAssistant::executeCommand(const char* cmd_line, const uint8_t* destination_id, bool is_channel) {
     const uint8_t* target = destination_id ? destination_id : SYSTEM_VIRTUAL_PUBKEY;
 
     // Skip leading spaces
@@ -128,7 +128,7 @@ void ChannelCli::executeCommand(const char* cmd_line, const uint8_t* destination
     }
 }
 
-void ChannelCli::cmdHelp(const uint8_t* dest, bool is_ch) {
+void CliAssistant::cmdHelp(const uint8_t* dest, bool is_ch) {
     const char* help_text = 
         "🔧 RO-mesh Companion Commands:\n"
         "• /status - Battery, GPS, Tier, and PA limiter\n"
@@ -142,12 +142,12 @@ void ChannelCli::cmdHelp(const uint8_t* dest, bool is_ch) {
     sendReply(dest, is_ch, help_text);
 }
 
-void ChannelCli::cmdStatus(const uint8_t* dest, bool is_ch) {
+void CliAssistant::cmdStatus(const uint8_t* dest, bool is_ch) {
     char buf[256];
     const char* tier_str = "Auto";
-    if (AdaptiveTier::instance().getMode() == TierMode::Manual) {
+    if (AutomaticTiers::instance().getMode() == TierMode::Manual) {
         tier_str = "Manual";
-    } else if (AdaptiveTier::instance().getMode() == TierMode::Disabled) {
+    } else if (AutomaticTiers::instance().getMode() == TierMode::Disabled) {
         tier_str = "Disabled";
     }
 
@@ -160,54 +160,54 @@ void ChannelCli::cmdStatus(const uint8_t* dest, bool is_ch) {
              "PA Limiter: %s (Gain: +%ddB)",
              _battery_pct, (double)_battery_volts,
              _gps_fix ? "FIX 3D" : "NO FIX", _sats,
-             tier_str, AdaptiveTier::instance().getActiveTier(),
-             PaGainLimiter::instance().isLimiterEnabled() ? "ACTIVE" : "BYPASS",
-             PaGainLimiter::instance().getPaGain());
+             tier_str, AutomaticTiers::instance().getActiveTier(),
+             GainEngine::instance().isLimiterEnabled() ? "ACTIVE" : "BYPASS",
+             GainEngine::instance().getPaGain());
     sendReply(dest, is_ch, buf);
 }
 
-void ChannelCli::cmdTier(const char* args, const uint8_t* dest, bool is_ch) {
+void CliAssistant::cmdTier(const char* args, const uint8_t* dest, bool is_ch) {
     while (*args == ' ') args++;
     char reply[128];
 
     if (strlen(args) == 0) {
         // Display current tier status
-        AdaptiveTier::instance().handleCommand("get tier", reply, sizeof(reply));
+        AutomaticTiers::instance().handleCommand("get tier", reply, sizeof(reply));
     } else {
         char cmd[64];
         snprintf(cmd, sizeof(cmd), "set tier %s", args);
-        AdaptiveTier::instance().handleCommand(cmd, reply, sizeof(reply));
+        AutomaticTiers::instance().handleCommand(cmd, reply, sizeof(reply));
     }
     sendReply(dest, is_ch, reply);
 }
 
-void ChannelCli::cmdSos(const char* args, const uint8_t* dest, bool is_ch) {
+void CliAssistant::cmdSos(const char* args, const uint8_t* dest, bool is_ch) {
     while (*args == ' ') args++;
     char reply[160];
 
     if (strcasecmp(args, "trigger") == 0) {
-        T1000eSos::instance().triggerManualSos("CLI /sos trigger");
+        SosT1000e::instance().triggerManualSos("CLI /sos trigger");
         snprintf(reply, sizeof(reply), "🚨 Emergency SOS ARMED! Countdown active (%u s). Hold 5s or /sos cancel to abort.",
-                 T1000eSos::instance().getConfig().countdown_seconds);
+                 SosT1000e::instance().getConfig().countdown_seconds);
     } else if (strcasecmp(args, "cancel") == 0) {
-        T1000eSos::instance().cancelSos("CLI /sos cancel");
+        SosT1000e::instance().cancelSos("CLI /sos cancel");
         snprintf(reply, sizeof(reply), "✅ SOS has been cancelled. Resolution transmitted.");
     } else {
         const char* st = "IDLE";
-        if (T1000eSos::instance().isArmed()) st = "ARMED_COUNTDOWN";
-        else if (T1000eSos::instance().isActive()) st = "ACTIVE_BEACONING";
-        else if (T1000eSos::instance().getState() == SosState::RESOLVED) st = "RESOLVED";
+        if (SosT1000e::instance().isArmed()) st = "ARMED_COUNTDOWN";
+        else if (SosT1000e::instance().isActive()) st = "ACTIVE_BEACONING";
+        else if (SosT1000e::instance().getState() == SosState::RESOLVED) st = "RESOLVED";
 
         snprintf(reply, sizeof(reply),
                  "🚨 SOS Status: %s\nChannel: %s | Interval: %us | Beacons Sent: %u",
-                 st, T1000eSos::instance().getConfig().channel,
-                 T1000eSos::instance().getConfig().interval_seconds,
-                 T1000eSos::instance().getActiveBeaconsSent());
+                 st, SosT1000e::instance().getConfig().channel,
+                 SosT1000e::instance().getConfig().interval_seconds,
+                 SosT1000e::instance().getActiveBeaconsSent());
     }
     sendReply(dest, is_ch, reply);
 }
 
-void ChannelCli::cmdTelemetry(const char* args, const uint8_t* dest, bool is_ch) {
+void CliAssistant::cmdTelemetry(const char* args, const uint8_t* dest, bool is_ch) {
     while (*args == ' ') args++;
     char reply[128];
 
@@ -221,13 +221,13 @@ void ChannelCli::cmdTelemetry(const char* args, const uint8_t* dest, bool is_ch)
     sendReply(dest, is_ch, reply);
 }
 
-void ChannelCli::cmdBattery(const uint8_t* dest, bool is_ch) {
+void CliAssistant::cmdBattery(const uint8_t* dest, bool is_ch) {
     char reply[96];
     snprintf(reply, sizeof(reply), "🔋 Battery: %u%% | Voltage: %.2fV", _battery_pct, (double)_battery_volts);
     sendReply(dest, is_ch, reply);
 }
 
-void ChannelCli::cmdGps(const uint8_t* dest, bool is_ch) {
+void CliAssistant::cmdGps(const uint8_t* dest, bool is_ch) {
     char reply[160];
     if (_gps_fix) {
         snprintf(reply, sizeof(reply),
@@ -239,17 +239,17 @@ void ChannelCli::cmdGps(const uint8_t* dest, bool is_ch) {
     sendReply(dest, is_ch, reply);
 }
 
-void ChannelCli::cmdPa(const uint8_t* dest, bool is_ch) {
+void CliAssistant::cmdPa(const uint8_t* dest, bool is_ch) {
     char reply[128];
     snprintf(reply, sizeof(reply),
              "📶 PA Gain Limiter: %s\nHardware PA Gain: +%d dB\nLegal Output Limit: +%d dBm conducted",
-             PaGainLimiter::instance().isLimiterEnabled() ? "ENABLED" : "DISABLED",
-             PaGainLimiter::instance().getPaGain(),
-             PaGainLimiter::instance().getLegalLimit());
+             GainEngine::instance().isLimiterEnabled() ? "ENABLED" : "DISABLED",
+             GainEngine::instance().getPaGain(),
+             GainEngine::instance().getLegalLimit());
     sendReply(dest, is_ch, reply);
 }
 
-void ChannelCli::cmdInfo(const uint8_t* dest, bool is_ch) {
+void CliAssistant::cmdInfo(const uint8_t* dest, bool is_ch) {
     const char* info = 
         "ℹ️ RO-mesh Firmware v1.0.0\n"
         "Architecture: Decoupled Zero-Conflict Core\n"

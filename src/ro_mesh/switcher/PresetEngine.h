@@ -12,7 +12,7 @@ struct SentryToken {
   bool burned;
 };
 
-class EmergencyProfileSwitcher {
+class PresetEngine {
   bool _enabled;
   uint8_t _channel_psk[16];
   bool _channel_set;
@@ -32,11 +32,11 @@ class EmergencyProfileSwitcher {
   uint8_t _scheduled_preset_id;
   bool _has_scheduled_cutover;
 
-  EmergencyProfileSwitcher();
+  PresetEngine();
 
 public:
-  static EmergencyProfileSwitcher& instance() {
-    static EmergencyProfileSwitcher inst;
+  static PresetEngine& instance() {
+    static PresetEngine inst;
     return inst;
   }
 

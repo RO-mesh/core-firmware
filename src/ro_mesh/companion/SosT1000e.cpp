@@ -1,16 +1,16 @@
-#include "T1000eSos.h"
+#include "SosT1000e.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 namespace ro_mesh {
 
-T1000eSos& T1000eSos::instance() {
-    static T1000eSos inst;
+SosT1000e& SosT1000e::instance() {
+    static SosT1000e inst;
     return inst;
 }
 
-T1000eSos::T1000eSos()
+SosT1000e::SosT1000e()
     : _state(SosState::IDLE),
       _button_last_state(false),
       _press_start_ms(0),
@@ -36,52 +36,52 @@ T1000eSos::T1000eSos()
     _config.countdown_seconds = 15;
 }
 
-void T1000eSos::init() {
+void SosT1000e::init() {
     _state = SosState::IDLE;
     _click_count = 0;
     _button_last_state = false;
     _beacons_sent = 0;
 }
 
-void T1000eSos::setCallsign(const char* callsign) {
+void SosT1000e::setCallsign(const char* callsign) {
     if (callsign && strlen(callsign) > 0) {
         strncpy(_config.callsign, callsign, sizeof(_config.callsign) - 1);
         _config.callsign[sizeof(_config.callsign) - 1] = '\0';
     }
 }
 
-void T1000eSos::setMessage(const char* msg) {
+void SosT1000e::setMessage(const char* msg) {
     if (msg && strlen(msg) > 0) {
         strncpy(_config.custom_message, msg, sizeof(_config.custom_message) - 1);
         _config.custom_message[sizeof(_config.custom_message) - 1] = '\0';
     }
 }
 
-void T1000eSos::setChannel(const char* ch) {
+void SosT1000e::setChannel(const char* ch) {
     if (ch && strlen(ch) > 0) {
         strncpy(_config.channel, ch, sizeof(_config.channel) - 1);
         _config.channel[sizeof(_config.channel) - 1] = '\0';
     }
 }
 
-void T1000eSos::setInterval(uint32_t sec) {
+void SosT1000e::setInterval(uint32_t sec) {
     if (sec >= 10 && sec <= 3600) {
         _config.interval_seconds = sec;
     }
 }
 
-void T1000eSos::updateGps(double lat, double lon, float altitude, bool has_fix) {
+void SosT1000e::updateGps(double lat, double lon, float altitude, bool has_fix) {
     _lat = lat;
     _lon = lon;
     _altitude = altitude;
     _has_gps_fix = has_fix;
 }
 
-void T1000eSos::updateBattery(uint8_t batt_pct) {
+void SosT1000e::updateBattery(uint8_t batt_pct) {
     _battery_pct = batt_pct > 100 ? 100 : batt_pct;
 }
 
-void T1000eSos::onButtonEvent(bool is_pressed, uint32_t now_ms) {
+void SosT1000e::onButtonEvent(bool is_pressed, uint32_t now_ms) {
     if (is_pressed && !_button_last_state) {
         // Button press transition
         _press_start_ms = now_ms;
@@ -117,7 +117,7 @@ void T1000eSos::onButtonEvent(bool is_pressed, uint32_t now_ms) {
     _button_last_state = is_pressed;
 }
 
-void T1000eSos::triggerManualSos(const char* /*reason*/) {
+void SosT1000e::triggerManualSos(const char* /*reason*/) {
     _state = SosState::ARMED_COUNTDOWN;
     _countdown_start_ms = 0; // Will be set in update()
     _last_beep_sec = 0;
@@ -128,7 +128,7 @@ void T1000eSos::triggerManualSos(const char* /*reason*/) {
     }
 }
 
-void T1000eSos::cancelSos(const char* reason) {
+void SosT1000e::cancelSos(const char* reason) {
     bool was_active = (_state == SosState::ACTIVE_BEACONING);
     _state = SosState::RESOLVED;
 
@@ -142,14 +142,14 @@ void T1000eSos::cancelSos(const char* reason) {
     (void)reason;
 }
 
-uint32_t T1000eSos::getRemainingCountdownSec() const {
+uint32_t SosT1000e::getRemainingCountdownSec() const {
     if (_state != SosState::ARMED_COUNTDOWN || _countdown_start_ms == 0) {
         return 0;
     }
     return _config.countdown_seconds - _last_beep_sec;
 }
 
-void T1000eSos::update(uint32_t now_ms) {
+void SosT1000e::update(uint32_t now_ms) {
     // Timeout click count if no subsequent click arrived
     if (_click_count > 0 && (now_ms - _last_click_ms > 700)) {
         _click_count = 0;
@@ -168,7 +168,7 @@ void T1000eSos::update(uint32_t now_ms) {
     }
 }
 
-void T1000eSos::processCountdown(uint32_t now_ms) {
+void SosT1000e::processCountdown(uint32_t now_ms) {
     uint32_t elapsed_ms = now_ms - _countdown_start_ms;
     uint32_t elapsed_sec = elapsed_ms / 1000;
 
@@ -188,7 +188,7 @@ void T1000eSos::processCountdown(uint32_t now_ms) {
     }
 }
 
-void T1000eSos::transmitSosBeacon(uint32_t now_ms) {
+void SosT1000e::transmitSosBeacon(uint32_t now_ms) {
     _last_beacon_ms = now_ms;
     _beacons_sent++;
 
@@ -232,7 +232,7 @@ void T1000eSos::transmitSosBeacon(uint32_t now_ms) {
     }
 }
 
-void T1000eSos::transmitResolution() {
+void SosT1000e::transmitResolution() {
     char buffer[256];
     if (_has_gps_fix) {
         snprintf(buffer, sizeof(buffer),

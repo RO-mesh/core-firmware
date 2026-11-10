@@ -36,19 +36,19 @@ jobs:
             -I lib/MeshCore/src \
             test/test_all.cpp \
             test/mock_region_map.cpp \
-            src/ro_mesh/regions/AutoRegionsRO.cpp \
-            src/ro_mesh/hal/AdaptiveTier.cpp \
-            src/ro_mesh/hal/PaGainLimiter.cpp \
+            src/ro_mesh/regions/AutomaticRegions.cpp \
+            src/ro_mesh/hal/AutomaticTiers.cpp \
+            src/ro_mesh/hal/GainEngine.cpp \
             src/ro_mesh/filter/QuarantineEngine.cpp \
             src/ro_mesh/filter/BatteryGate.cpp \
-            src/ro_mesh/filter/PacketFilter.cpp \
-            src/ro_mesh/switcher/PresetCutover.cpp \
-            src/ro_mesh/switcher/EmergencyProfileSwitcher.cpp \
-            src/ro_mesh/advert/DeterministicAdverts.cpp \
-            src/ro_mesh/companion/T1000eSos.cpp \
-            src/ro_mesh/companion/ChannelCli.cpp \
+            src/ro_mesh/filter/FilterEngine.cpp \
+            src/ro_mesh/switcher/RomanianPresets.cpp \
+            src/ro_mesh/switcher/PresetEngine.cpp \
+            src/ro_mesh/advert/SmartAdverts.cpp \
+            src/ro_mesh/companion/SosT1000e.cpp \
+            src/ro_mesh/companion/CliAssistant.cpp \
             src/ro_mesh/companion/TelemetryBeacon.cpp \
-            src/ro_mesh/companion/MessageStore.cpp \
+            src/ro_mesh/companion/MessageStorage.cpp \
             -o build/test_runner
           ./build/test_runner
 

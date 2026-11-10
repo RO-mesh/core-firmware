@@ -25,7 +25,7 @@ inline bool isSystemContact(const uint8_t* pub_key) {
 /**
  * Pre-populates the virtual "System" contact in the contact table if not already present.
  */
-inline void initSystemVirtualContact(ContactInfo contacts[], int max_contacts, int& num_contacts) {
+inline void initCliContact(ContactInfo contacts[], int max_contacts, int& num_contacts) {
   for (int i = 0; i < num_contacts; i++) {
     if (isSystemContact(contacts[i].id.pub_key)) {
       return; // Already present
@@ -42,6 +42,10 @@ inline void initSystemVirtualContact(ContactInfo contacts[], int max_contacts, i
     sys.out_path_len = 0; // Local direct interface
     sys.lastmod = 1;
   }
+}
+
+inline void initSystemVirtualContact(ContactInfo contacts[], int max_contacts, int& num_contacts) {
+  initCliContact(contacts, max_contacts, num_contacts);
 }
 
 } // namespace ro_mesh

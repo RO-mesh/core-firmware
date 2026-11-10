@@ -25,9 +25,9 @@ struct FilterStats {
     uint32_t dropped_hops;
 };
 
-class PacketFilter {
+class FilterEngine {
 public:
-    static PacketFilter& instance();
+    static FilterEngine& instance();
 
     void init(uint8_t max_hops = 7);
 
@@ -47,7 +47,7 @@ public:
     bool handleCliCommand(const char* cmd, char* reply, size_t max_len);
 
 private:
-    PacketFilter();
+    FilterEngine();
 
     FilterStats _stats;
     uint8_t _max_hops;

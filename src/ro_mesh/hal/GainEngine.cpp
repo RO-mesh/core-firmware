@@ -1,4 +1,4 @@
-#include "PaGainLimiter.h"
+#include "GainEngine.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -13,14 +13,14 @@ namespace ro_mesh {
   #endif
 #endif
 
-PaGainLimiter::PaGainLimiter()
+GainEngine::GainEngine()
   : _enabled(true),
     _pa_gain_db(DEFAULT_PA_GAIN_DB),
     _legal_limit_dbm(27) // 500 mW ERP default under EU/ANCOM 869.4-869.65 MHz
 {
 }
 
-int8_t PaGainLimiter::clampTransceiverDrive(int8_t targetConductedDbm) const {
+int8_t GainEngine::clampTransceiverDrive(int8_t targetConductedDbm) const {
   if (!_enabled || _pa_gain_db <= 0) {
     return targetConductedDbm;
   }
@@ -34,14 +34,14 @@ int8_t PaGainLimiter::clampTransceiverDrive(int8_t targetConductedDbm) const {
   return target_drive;
 }
 
-int8_t PaGainLimiter::getEffectiveConductedPower(int8_t actualTransceiverDriveDbm) const {
+int8_t GainEngine::getEffectiveConductedPower(int8_t actualTransceiverDriveDbm) const {
   if (_pa_gain_db > 0) {
     return actualTransceiverDriveDbm + _pa_gain_db;
   }
   return actualTransceiverDriveDbm;
 }
 
-bool PaGainLimiter::handleCommand(const char* cmd, char* reply, size_t max_len) {
+bool GainEngine::handleCommand(const char* cmd, char* reply, size_t max_len) {
   if (!cmd || !reply) return false;
 
   if (strcasecmp(cmd, "get pa.status") == 0) {

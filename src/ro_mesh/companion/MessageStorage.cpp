@@ -1,24 +1,24 @@
-#include "MessageStore.h"
+#include "MessageStorage.h"
 #include <string.h>
 
 namespace ro_mesh {
 
-MessageStore& MessageStore::instance() {
-    static MessageStore inst;
+MessageStorage& MessageStorage::instance() {
+    static MessageStorage inst;
     return inst;
 }
 
-MessageStore::MessageStore() : _head(0), _count(0) {
+MessageStorage::MessageStorage() : _head(0), _count(0) {
     memset(_messages, 0, sizeof(_messages));
 }
 
-void MessageStore::init() {
+void MessageStorage::init() {
     _head = 0;
     _count = 0;
     memset(_messages, 0, sizeof(_messages));
 }
 
-bool MessageStore::addMessage(const uint8_t* sender_pubkey, const char* sender_name,
+bool MessageStorage::addMessage(const uint8_t* sender_pubkey, const char* sender_name,
                               const char* channel_name, const char* text,
                               bool is_outgoing, uint32_t timestamp) {
     if (!text || strlen(text) == 0) return false;
@@ -47,7 +47,7 @@ bool MessageStore::addMessage(const uint8_t* sender_pubkey, const char* sender_n
     return true;
 }
 
-size_t MessageStore::getUnreadCount() const {
+size_t MessageStorage::getUnreadCount() const {
     size_t unread = 0;
     for (size_t i = 0; i < _count; i++) {
         if (_messages[i].is_unread) {
@@ -57,13 +57,13 @@ size_t MessageStore::getUnreadCount() const {
     return unread;
 }
 
-void MessageStore::markAllRead() {
+void MessageStorage::markAllRead() {
     for (size_t i = 0; i < _count; i++) {
         _messages[i].is_unread = false;
     }
 }
 
-const StoredMessage* MessageStore::getMessage(size_t index) const {
+const StoredMessage* MessageStorage::getMessage(size_t index) const {
     if (index >= _count) return nullptr;
     // index 0 is oldest message
     size_t start_idx = (_head + MAX_STORED_MESSAGES - _count) % MAX_STORED_MESSAGES;
@@ -71,7 +71,7 @@ const StoredMessage* MessageStore::getMessage(size_t index) const {
     return &_messages[actual_idx];
 }
 
-void MessageStore::clear() {
+void MessageStorage::clear() {
     _head = 0;
     _count = 0;
     memset(_messages, 0, sizeof(_messages));

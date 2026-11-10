@@ -1,14 +1,14 @@
 #include <Arduino.h>
 #include <Mesh.h>
 
-#include "../ro_mesh/regions/AutoRegionsRO.h"
-#include "../ro_mesh/hal/AdaptiveTier.h"
-#include "../ro_mesh/hal/PaGainLimiter.h"
+#include "../ro_mesh/regions/AutomaticRegions.h"
+#include "../ro_mesh/hal/AutomaticTiers.h"
+#include "../ro_mesh/hal/GainEngine.h"
 #include "../ro_mesh/filter/QuarantineEngine.h"
-#include "../ro_mesh/filter/PacketFilter.h"
+#include "../ro_mesh/filter/FilterEngine.h"
 #include "../ro_mesh/filter/BatteryGate.h"
-#include "../ro_mesh/switcher/EmergencyProfileSwitcher.h"
-#include "../ro_mesh/advert/DeterministicAdverts.h"
+#include "../ro_mesh/switcher/PresetEngine.h"
+#include "../ro_mesh/advert/SmartAdverts.h"
 
 // Hardware and board includes from MeshCore
 #ifdef DISPLAY_CLASS
@@ -30,38 +30,38 @@ void setup() {
   delay(500);
   Serial.println("\n--- Starting RO-mesh Repeater ---");
 
-  // 1. Initialize PA Gain Limiter
+  // 1. Initialize Gain Engine
 #ifdef PA_GAIN_DB
-  PaGainLimiter::instance().setLimiterEnabled(true);
-  PaGainLimiter::instance().setPaGain(PA_GAIN_DB);
-  int8_t clamped_drive = PaGainLimiter::instance().clampTransceiverDrive(LORA_TX_POWER);
+  GainEngine::instance().setLimiterEnabled(true);
+  GainEngine::instance().setPaGain(PA_GAIN_DB);
+  int8_t clamped_drive = GainEngine::instance().clampTransceiverDrive(LORA_TX_POWER);
   Serial.printf("[RO-mesh] Hardware PA Gain: +%d dB | Clamped SX1262 Drive: +%d dBm\n",
                 PA_GAIN_DB, clamped_drive);
 #else
-  PaGainLimiter::instance().setLimiterEnabled(false);
-  PaGainLimiter::instance().setPaGain(0);
+  GainEngine::instance().setLimiterEnabled(false);
+  GainEngine::instance().setPaGain(0);
 #endif
 
   // 2. Initialize Battery Protection Gate
   BatteryGate::instance().init(3.40f, 3.60f);
 
-  // 3. Initialize Packet Filter & Quarantine Engine
-  PacketFilter::instance().init(7); // Max 7 hops
+  // 3. Initialize Filter Engine & Quarantine Engine
+  FilterEngine::instance().init(7); // Max 7 hops
   QuarantineEngine::instance().init(3000, 250); // Airtime bucket defaults
 
-  // 4. Initialize AutoRegions for Romania (#ro)
-  AutoRegionsRO::instance().init();
+  // 4. Initialize AutomaticRegions for Romania (#ro)
+  AutomaticRegions::instance().init();
   // Evaluates node name (e.g. RO-BV-01) or lat/lon coordinates
-  const char* active_scope = AutoRegionsRO::instance().getActiveScope();
+  const char* active_scope = AutomaticRegions::instance().getActiveScope();
   Serial.printf("[RO-mesh] Active Regional Scope: %s\n", active_scope);
 
-  // 5. Initialize Adaptive Tier Delays
-  AdaptiveTier::instance().setMode(TierMode::Auto);
-  Serial.printf("[RO-mesh] Adaptive Tier initialized (Mode: Auto, Active: T%u)\n",
-                AdaptiveTier::instance().getActiveTier());
+  // 5. Initialize Automatic Tiers Delays
+  AutomaticTiers::instance().setMode(TierMode::Auto);
+  Serial.printf("[RO-mesh] Automatic Tiers initialized (Mode: Auto, Active: T%u)\n",
+                AutomaticTiers::instance().getActiveTier());
 
-  // 6. Initialize Emergency Profile Switcher
-  EmergencyProfileSwitcher::instance().init();
+  // 6. Initialize Preset Engine
+  PresetEngine::instance().init();
 
   Serial.println("[RO-mesh] Repeater modules initialized successfully.");
 }
@@ -70,16 +70,16 @@ void loop() {
   uint32_t now_ms = millis();
   uint32_t now_sec = now_ms / 1000;
 
-  // Process adaptive tier sliding window metrics
-  AdaptiveTier::instance().loop(now_ms);
+  // Process automatic tier sliding window metrics
+  AutomaticTiers::instance().loop(now_ms);
 
-  // Check emergency profile switcher schedule/expiration
-  EmergencyProfileSwitcher::instance().update(now_ms);
+  // Check preset engine schedule/expiration
+  PresetEngine::instance().update(now_ms);
 
-  // Check self-originated deterministic adverts
-  if (DeterministicAdverts::instance().shouldTransmitAdvert(now_sec)) {
-    Serial.println("[RO-mesh] Transmitting scheduled deterministic node advert...");
-    DeterministicAdverts::instance().recordAdvertTransmitted(now_sec);
+  // Check self-originated smart adverts
+  if (SmartAdverts::instance().shouldTransmitAdvert(now_sec)) {
+    Serial.println("[RO-mesh] Transmitting scheduled smart node advert...");
+    SmartAdverts::instance().recordAdvertTransmitted(now_sec);
   }
 
   // Handle local serial CLI commands
@@ -90,18 +90,18 @@ void loop() {
       char reply[256];
       memset(reply, 0, sizeof(reply));
 
-      if (AdaptiveTier::instance().handleCommand(cmd.c_str(), reply, sizeof(reply))) {
+      if (AutomaticTiers::instance().handleCommand(cmd.c_str(), reply, sizeof(reply))) {
         Serial.println(reply);
-      } else if (PaGainLimiter::instance().handleCommand(cmd.c_str(), reply, sizeof(reply))) {
+      } else if (GainEngine::instance().handleCommand(cmd.c_str(), reply, sizeof(reply))) {
         Serial.println(reply);
       } else if (QuarantineEngine::instance().handleCommand(cmd.c_str(), reply, sizeof(reply))) {
         Serial.println(reply);
-      } else if (PacketFilter::instance().handleCliCommand(cmd.c_str(), reply, sizeof(reply))) {
+      } else if (FilterEngine::instance().handleCliCommand(cmd.c_str(), reply, sizeof(reply))) {
         Serial.println(reply);
       } else if (cmd.equalsIgnoreCase("status")) {
         Serial.printf("[RO-mesh Status] Scope: %s | Tier: T%u | Battery: %.2fV (Relay: %s)\n",
-                      AutoRegionsRO::instance().getActiveScope(),
-                      AdaptiveTier::instance().getActiveTier(),
+                      AutomaticRegions::instance().getActiveScope(),
+                      AutomaticTiers::instance().getActiveTier(),
                       (double)BatteryGate::instance().getCurrentVoltage(),
                       BatteryGate::instance().isRelayAllowed() ? "OK" : "PAUSED");
       } else {

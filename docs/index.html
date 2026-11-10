@@ -619,26 +619,26 @@
     <div id="panel-repeater" class="tab-panel active">
       <div class="feature-card">
         <span class="feature-icon">🇷🇴</span>
-        <h3>AutoRegionsRO</h3>
-        <p>Maps 8 macro-regions and 42 counties with centroid polygons. Parses vehicle prefixes (e.g. <code>RO-BV-01</code>) and falls back safely to national <code>#ro</code> scope.</p>
+        <h3>AutomaticRegions</h3>
+        <p>Maps 8 macro-regions and 42 counties with centroid polygons via <code>RomanianRegions.h</code>. Parses vehicle prefixes (e.g. <code>RO-BV-01</code>) and falls back safely to national <code>#ro</code> scope.</p>
         <div class="feature-spec">Auto-Fallback: #europe → #ro → county</div>
       </div>
       <div class="feature-card">
         <span class="feature-icon">⏱️</span>
-        <h3>AdaptiveTier Engine</h3>
+        <h3>AutomaticTiers Engine</h3>
         <p>Implements real-world second-based delay tiers (<code>rxdelay 3.0s</code>, <code>txdelay 0.3s–2.0s</code>) with a 15-minute sliding window to prioritize strategic mountain nodes.</p>
         <div class="feature-spec">Tier 0 (Mountain) → Tier 3 (Edge)</div>
       </div>
       <div class="feature-card">
         <span class="feature-icon">📶</span>
-        <h3>Universal PA Gain Limiter</h3>
-        <p>Attenuates SX1262 drive level on 1W boards (T-Beam 1W, RAK 1W) to strictly enforce the +27 dBm ERP / +22 dBm conducted legal boundary.</p>
-        <div class="feature-spec">Output = min(Target, Legal - PA Gain)</div>
+        <h3>GainEngine (Universal PA Limiter)</h3>
+        <p>Attenuates SX1262 drive level on 1W boards (T-Beam 1W, RAK 1W) to strictly enforce the +27 dBm ERP (500 mW) legal boundary under CEPT / ANCOM.</p>
+        <div class="feature-spec">SX1262 Drive = min(Target, 27 dBm - PA Gain)</div>
       </div>
       <div class="feature-card">
         <span class="feature-icon">🛡️</span>
-        <h3>QuarantineEngine</h3>
-        <p>Enforces a 10% duty cycle airtime token bucket and universal 24-hour remote advert rate limiting. Rogue flooders are quarantined for 60 minutes.</p>
+        <h3>FilterEngine & QuarantineEngine</h3>
+        <p>Enforces a 10% duty cycle airtime token bucket and universal 24-hour remote advert rate limiting. Rogue flooders are dropped and quarantined for 60 minutes.</p>
         <div class="feature-spec">MAC Filter Level Dropping</div>
       </div>
       <div class="feature-card">
@@ -649,9 +649,15 @@
       </div>
       <div class="feature-card">
         <span class="feature-icon">📡</span>
-        <h3>RO-mesh Sentry</h3>
+        <h3>PresetEngine & RomanianPresets (Sentry)</h3>
         <p>Remote preset switching with single-use burned tokens and inconspicuous steganographic parsing (<code>WX:</code> weather & <code>chk</code> check-in strings).</p>
-        <div class="feature-spec">Anti-Replay Protection</div>
+        <div class="feature-spec">Anti-Replay Disposable Tokens</div>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">🕒</span>
+        <h3>SmartAdverts Scheduling</h3>
+        <p>Calculates a deterministic transmission slot in a 23-hour rolling window derived from <code>FNV-1a(pubkey)</code> to eliminate periodic advert collisions.</p>
+        <div class="feature-spec">23-Hour Hash-Slotted Window</div>
       </div>
     </div>
 
@@ -659,27 +665,33 @@
     <div id="panel-companion" class="tab-panel">
       <div class="feature-card">
         <span class="feature-icon">🚨</span>
-        <h3>T1000-E SOS Engine</h3>
+        <h3>SosT1000e Hardware Engine</h3>
         <p>Double-click hardware button arms a 15-second audible countdown. A 5-second long hold disarms and cancels, eliminating conflict with factory GPS triple-clicks.</p>
         <div class="feature-spec">Dual-Target: #sos + Direct Contacts</div>
       </div>
       <div class="feature-card">
         <span class="feature-icon">💬</span>
-        <h3>Virtual "System" Assistant</h3>
+        <h3>CliAssistant & CliContact (In-Chat)</h3>
         <p>Chat directly with your device firmware under the reserved contact <code>System</code>. Slash commands execute locally consuming zero RF airtime.</p>
         <div class="feature-spec">Zero Airtime Consumption</div>
       </div>
       <div class="feature-card">
         <span class="feature-icon">📍</span>
-        <h3>Smart Telemetry Beacon</h3>
+        <h3>TelemetryBeacon</h3>
         <p>Distance-triggered position beaconing (100m threshold) with 15-minute fallback. Strictly barred from broadcasting on the global <code>Public</code> channel.</p>
         <div class="feature-spec">Automatic Map Links</div>
       </div>
       <div class="feature-card">
         <span class="feature-icon">📻</span>
-        <h3>Pre-Populated Channels</h3>
+        <h3>RomanianChannels Provisioning</h3>
         <p>Zero onboarding setup. Instantly provisions official <code>Public</code>, <code>#romania</code>, <code>#sos</code>, <code>#alerte</code>, and <code>RO-mesh T1000E CLI</code>.</p>
         <div class="feature-spec">Official MeshCore Global PSK</div>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">💾</span>
+        <h3>MessageStorage Ring Buffer</h3>
+        <p>Stores recent companion messages and asynchronous system notifications offline for instant retrieval.</p>
+        <div class="feature-spec">Offline Ring Buffer (32 Entries)</div>
       </div>
     </div>
   </section>
@@ -690,7 +702,7 @@
       <span class="section-tag">Physics-Accurate Timing</span>
       <h2 class="section-title">LoRa Narrow Delay Tier Simulator</h2>
       <p class="section-desc">
-        Narrow sub-band packets take 250–750+ ms. Millisecond delays cause total channel congestion. Move the slider to see how AdaptiveTier dynamically allocates repeating precedence.
+        Narrow sub-band packets take 250–750+ ms. Millisecond delays cause total channel congestion. Move the slider to see how AutomaticTiers dynamically allocates repeating precedence.
       </p>
     </div>
 
@@ -758,9 +770,15 @@
           </tr>
           <tr>
             <td><span class="code-tag">In-Chat</span></td>
-            <td><code>/sos [trigger|cancel]</code></td>
-            <td>Triggers or clears active emergency SOS beaconing</td>
-            <td><code>/sos cancel</code></td>
+            <td><code>/sos [trigger|cancel|status]</code></td>
+            <td>Triggers, cancels, or inspects active emergency SOS beaconing</td>
+            <td><code>/sos trigger</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">In-Chat</span></td>
+            <td><code>/telemetry [on|off|status]</code></td>
+            <td>Toggles or checks smart movement telemetry beaconing</td>
+            <td><code>/telemetry status</code></td>
           </tr>
           <tr>
             <td><span class="code-tag">In-Chat</span></td>
@@ -775,6 +793,18 @@
             <td><code>/battery</code></td>
           </tr>
           <tr>
+            <td><span class="code-tag">In-Chat</span></td>
+            <td><code>/pa</code></td>
+            <td>GainEngine power clamp status and conducted levels</td>
+            <td><code>/pa</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">In-Chat</span></td>
+            <td><code>/info</code></td>
+            <td>Firmware version, git commit, decoupled architecture</td>
+            <td><code>/info</code></td>
+          </tr>
+          <tr>
             <td><span class="code-tag">Serial</span></td>
             <td><code>get tier</code></td>
             <td>Inspects active mode, tier index, and delay seconds</td>
@@ -783,8 +813,26 @@
           <tr>
             <td><span class="code-tag">Serial</span></td>
             <td><code>set tier &lt;0-3&gt;</code></td>
-            <td>Manually locks repeater into designated delay tier</td>
+            <td>Manually locks repeater into designated delay tier (0 to 3)</td>
             <td><code>set tier 0</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>set tier auto</code></td>
+            <td>Enables adaptive 15-minute sliding window calculation</td>
+            <td><code>set tier auto</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>set tier off</code></td>
+            <td>Disables tier delays (reverts to stock defaults)</td>
+            <td><code>set tier off</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>get pa.status</code></td>
+            <td>Displays GainEngine state, registered gain, and legal cap</td>
+            <td><code>get pa.status</code></td>
           </tr>
           <tr>
             <td><span class="code-tag">Serial</span></td>
@@ -795,8 +843,20 @@
           <tr>
             <td><span class="code-tag">Serial</span></td>
             <td><code>set pa.gain &lt;dB&gt;</code></td>
-            <td>Sets hardware amplifier gain level (e.g. 14 dB)</td>
+            <td>Sets hardware amplifier gain level (e.g. 14 dB for RAK, 10 for T-Beam 1W)</td>
             <td><code>set pa.gain 14</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>get filter.stats</code></td>
+            <td>Displays FilterEngine statistics (evaluated, forwarded, drops)</td>
+            <td><code>get filter.stats</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>set filter.maxhops &lt;1-15&gt;</code></td>
+            <td>Sets maximum allowable packet hop limit (default: 7)</td>
+            <td><code>set filter.maxhops 7</code></td>
           </tr>
           <tr>
             <td><span class="code-tag">Serial</span></td>
@@ -807,8 +867,50 @@
           <tr>
             <td><span class="code-tag">Serial</span></td>
             <td><code>ban add &lt;hex&gt; &lt;min&gt;</code></td>
-            <td>Manually puts a node public key into quarantine</td>
+            <td>Manually puts a node public key prefix into quarantine</td>
             <td><code>ban add A1B2C3D4 120</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>ban del &lt;hex&gt;</code></td>
+            <td>Removes a node from quarantine</td>
+            <td><code>ban del A1B2C3D4</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>sentry status</code></td>
+            <td>PresetEngine status: active preset, monitored channel, tokens</td>
+            <td><code>sentry status</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>sentry on|off</code></td>
+            <td>Enables or disables remote profile switcher</td>
+            <td><code>sentry on</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>sentry channel &lt;name&gt;</code></td>
+            <td>Sets monitored channel name for emergency triggers</td>
+            <td><code>sentry channel #ops</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>sentry token add &lt;tok&gt;</code></td>
+            <td>Registers a disposable single-use token ("burn-after-reading")</td>
+            <td><code>sentry token add ALPHA7</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>sentry token list</code></td>
+            <td>Lists all stored tokens and their burned status</td>
+            <td><code>sentry token list</code></td>
+          </tr>
+          <tr>
+            <td><span class="code-tag">Serial</span></td>
+            <td><code>status</code></td>
+            <td>Summarizes active scope, tier, battery voltage, and relay state</td>
+            <td><code>status</code></td>
           </tr>
         </tbody>
       </table>

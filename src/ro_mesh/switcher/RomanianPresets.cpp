@@ -1,23 +1,23 @@
-#include "PresetCutover.h"
-#include "../hal/PaGainLimiter.h"
+#include "RomanianPresets.h"
+#include "../hal/GainEngine.h"
 #include <string.h>
 #include <stdio.h>
 
 namespace ro_mesh {
 
-RadioPreset PresetCutover::s_presets[3];
-bool PresetCutover::s_initialized = false;
+RadioPreset RomanianPresets::s_presets[3];
+bool RomanianPresets::s_initialized = false;
 
-void PresetCutover::initPresets() {
+void RomanianPresets::initPresets() {
   if (s_initialized) return;
 
-  s_presets[0] = RadioPreset(1, "Official MeshCore Narrow", 869.618f, 62.5f, 8, 8, 22);
+  s_presets[0] = RadioPreset(1, "Official MeshCore Narrow", 869.618f, 62.5f, 8, 5, 22);
   s_presets[1] = RadioPreset(2, "Narrow Balanced SF8 CR5",  869.618f, 62.5f, 8, 5, 22);
   s_presets[2] = RadioPreset(3, "Narrow Fast SF7 CR5",      869.618f, 62.5f, 7, 5, 22);
   s_initialized = true;
 }
 
-const RadioPreset* PresetCutover::getPreset(uint8_t id) {
+const RadioPreset* RomanianPresets::getPreset(uint8_t id) {
   initPresets();
   if (id >= 1 && id <= 3) {
     return &s_presets[id - 1];
@@ -25,7 +25,7 @@ const RadioPreset* PresetCutover::getPreset(uint8_t id) {
   return nullptr;
 }
 
-bool PresetCutover::setPreset(uint8_t id, float freq, float bw, uint8_t sf, uint8_t cr, int8_t target_dbm) {
+bool RomanianPresets::setPreset(uint8_t id, float freq, float bw, uint8_t sf, uint8_t cr, int8_t target_dbm) {
   initPresets();
   if (id < 1 || id > 3) return false;
   if (freq < 150.0f || freq > 960.0f) return false;
@@ -44,7 +44,7 @@ bool PresetCutover::setPreset(uint8_t id, float freq, float bw, uint8_t sf, uint
   return true;
 }
 
-bool PresetCutover::applyPreset(uint8_t id, CommonRadioPrefs& prefs) {
+bool RomanianPresets::applyPreset(uint8_t id, CommonRadioPrefs& prefs) {
   initPresets();
   const RadioPreset* p = getPreset(id);
   if (!p) return false;
@@ -54,8 +54,8 @@ bool PresetCutover::applyPreset(uint8_t id, CommonRadioPrefs& prefs) {
   prefs.setSpreadFactor(p->sf);
   prefs.setCodingRate(p->cr);
 
-  // Clamp transceiver output using PA Gain Limiter
-  int8_t clamped_power = PaGainLimiter::instance().clampTransceiverDrive(p->target_dbm);
+  // Clamp transceiver output using Gain Engine
+  int8_t clamped_power = GainEngine::instance().clampTransceiverDrive(p->target_dbm);
   prefs.setTxPower((uint8_t)(clamped_power > 0 ? clamped_power : 0));
   prefs.markDirty();
   return true;

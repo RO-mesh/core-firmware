@@ -1,4 +1,4 @@
-#include "PacketFilter.h"
+#include "FilterEngine.h"
 #include "BatteryGate.h"
 #include "QuarantineEngine.h"
 #include <string.h>
@@ -7,25 +7,25 @@
 
 namespace ro_mesh {
 
-PacketFilter& PacketFilter::instance() {
-    static PacketFilter inst;
+FilterEngine& FilterEngine::instance() {
+    static FilterEngine inst;
     return inst;
 }
 
-PacketFilter::PacketFilter() : _max_hops(7) {
+FilterEngine::FilterEngine() : _max_hops(7) {
     memset(&_stats, 0, sizeof(_stats));
 }
 
-void PacketFilter::init(uint8_t max_hops) {
+void FilterEngine::init(uint8_t max_hops) {
     _max_hops = max_hops;
     memset(&_stats, 0, sizeof(_stats));
 }
 
-void PacketFilter::resetStats() {
+void FilterEngine::resetStats() {
     memset(&_stats, 0, sizeof(_stats));
 }
 
-FilterVerdict PacketFilter::evaluate(const uint8_t* sender_pubkey,
+FilterVerdict FilterEngine::evaluate(const uint8_t* sender_pubkey,
                                      bool is_advert,
                                      uint8_t hop_count,
                                      uint16_t packet_len,
@@ -73,12 +73,12 @@ FilterVerdict PacketFilter::evaluate(const uint8_t* sender_pubkey,
     return FilterVerdict::ALLOW;
 }
 
-bool PacketFilter::handleCliCommand(const char* cmd, char* reply, size_t max_len) {
+bool FilterEngine::handleCliCommand(const char* cmd, char* reply, size_t max_len) {
     if (!cmd || !reply || max_len == 0) return false;
 
     if (strcmp(cmd, "get filter.stats") == 0) {
         snprintf(reply, max_len,
-                 "📊 PacketFilter Stats:\n"
+                 "📊 FilterEngine Stats:\n"
                  "Evaluated: %u | Forwarded: %u\n"
                  "Dropped Battery: %u\n"
                  "Dropped Quarantine: %u\n"

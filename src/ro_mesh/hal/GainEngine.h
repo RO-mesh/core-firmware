@@ -4,16 +4,16 @@
 
 namespace ro_mesh {
 
-class PaGainLimiter {
+class GainEngine {
   bool _enabled;
   int8_t _pa_gain_db;
   int8_t _legal_limit_dbm;
 
-  PaGainLimiter();
+  GainEngine();
 
 public:
-  static PaGainLimiter& instance() {
-    static PaGainLimiter inst;
+  static GainEngine& instance() {
+    static GainEngine inst;
     return inst;
   }
 

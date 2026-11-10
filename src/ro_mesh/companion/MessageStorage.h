@@ -16,11 +16,11 @@ struct StoredMessage {
     bool is_unread;
 };
 
-class MessageStore {
+class MessageStorage {
 public:
     static constexpr size_t MAX_STORED_MESSAGES = 32;
 
-    static MessageStore& instance();
+    static MessageStorage& instance();
 
     void init();
     bool addMessage(const uint8_t* sender_pubkey, const char* sender_name,
@@ -35,7 +35,7 @@ public:
     void clear();
 
 private:
-    MessageStore();
+    MessageStorage();
 
     StoredMessage _messages[MAX_STORED_MESSAGES];
     size_t _head;

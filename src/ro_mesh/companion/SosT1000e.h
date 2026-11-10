@@ -22,9 +22,9 @@ struct SosConfig {
     uint32_t countdown_seconds;  // Default 15 seconds
 };
 
-class T1000eSos {
+class SosT1000e {
 public:
-    static T1000eSos& instance();
+    static SosT1000e& instance();
 
     void init();
     void update(uint32_t now_ms);
@@ -61,7 +61,7 @@ public:
     void setBeepCallback(AlertBeepCallback cb) { _beep_cb = cb; }
 
 private:
-    T1000eSos();
+    SosT1000e();
 
     void processCountdown(uint32_t now_ms);
     void transmitSosBeacon(uint32_t now_ms);

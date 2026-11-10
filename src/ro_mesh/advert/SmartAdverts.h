@@ -6,11 +6,11 @@
 
 namespace ro_mesh {
 
-class DeterministicAdverts {
+class SmartAdverts {
 public:
     static constexpr uint32_t CYCLE_DURATION_SEC = 23 * 3600; // 23-hour rolling window
 
-    static DeterministicAdverts& instance();
+    static SmartAdverts& instance();
 
     void init(const uint8_t* node_pubkey);
 
@@ -29,7 +29,7 @@ public:
     void triggerImmediate();
 
 private:
-    DeterministicAdverts();
+    SmartAdverts();
 
     uint32_t computeSlotOffset(const uint8_t* pubkey);
     void scheduleNextTx(uint32_t now_sec);

@@ -11,9 +11,9 @@ namespace ro_mesh {
 // is_channel: true if target is a channel hash, false if target is a 32-byte contact pubkey
 typedef void (*InjectSystemMessageCallback)(const uint8_t* target_id, bool is_channel, const char* message);
 
-class ChannelCli {
+class CliAssistant {
 public:
-    static ChannelCli& instance();
+    static CliAssistant& instance();
 
     void init();
     void setInjectCallback(InjectSystemMessageCallback cb) { _inject_cb = cb; }
@@ -35,7 +35,7 @@ public:
     }
 
 private:
-    ChannelCli();
+    CliAssistant();
 
     void executeCommand(const char* cmd_line, const uint8_t* destination_id, bool is_channel);
     void cmdHelp(const uint8_t* dest, bool is_ch);

@@ -1,14 +1,14 @@
 #include <Arduino.h>
 #include <Mesh.h>
 
-#include "../ro_mesh/companion/DefaultChannels.h"
-#include "../ro_mesh/companion/SystemVirtualContact.h"
-#include "../ro_mesh/companion/ChannelCli.h"
-#include "../ro_mesh/companion/T1000eSos.h"
+#include "../ro_mesh/companion/RomanianChannels.h"
+#include "../ro_mesh/companion/CliContact.h"
+#include "../ro_mesh/companion/CliAssistant.h"
+#include "../ro_mesh/companion/SosT1000e.h"
 #include "../ro_mesh/companion/TelemetryBeacon.h"
-#include "../ro_mesh/companion/MessageStore.h"
-#include "../ro_mesh/hal/PaGainLimiter.h"
-#include "../ro_mesh/hal/AdaptiveTier.h"
+#include "../ro_mesh/companion/MessageStorage.h"
+#include "../ro_mesh/hal/GainEngine.h"
+#include "../ro_mesh/hal/AutomaticTiers.h"
 
 using namespace ro_mesh;
 
@@ -31,7 +31,7 @@ static void injectSystemMessage(const uint8_t* target_id, bool is_channel, const
   Serial.printf("[SYSTEM CHAT] Target: %s | Msg: %s\n",
                 is_channel ? "Channel" : "System Contact", message);
   // Store in offline message store
-  MessageStore::instance().addMessage(
+  MessageStorage::instance().addMessage(
     SYSTEM_VIRTUAL_PUBKEY, "System", is_channel ? "CLI" : "", message, false, millis() / 1000
   );
 }
@@ -78,24 +78,24 @@ void setup() {
 
   pinMode(PIN_USER_BTN, INPUT_PULLUP);
 
-  // 1. Initialize Message Store
-  MessageStore::instance().init();
+  // 1. Initialize Message Storage
+  MessageStorage::instance().init();
 
-  // 2. Initialize Channel CLI with System injection callback
-  ChannelCli::instance().init();
-  ChannelCli::instance().setInjectCallback(injectSystemMessage);
+  // 2. Initialize CLI Assistant with System injection callback
+  CliAssistant::instance().init();
+  CliAssistant::instance().setInjectCallback(injectSystemMessage);
 
   // 3. Initialize SOS Engine
-  T1000eSos::instance().init();
-  T1000eSos::instance().setSendCallback(sendSosPacket);
-  T1000eSos::instance().setBeepCallback(beepSosAlert);
+  SosT1000e::instance().init();
+  SosT1000e::instance().setSendCallback(sendSosPacket);
+  SosT1000e::instance().setBeepCallback(beepSosAlert);
 
   // 4. Initialize Telemetry Beacon (Strictly barred from Public channel)
   TelemetryBeacon::instance().init();
   TelemetryBeacon::instance().setTransmitCallback(sendTelemetryPacket);
 
   // 5. Send automated welcome message to System chat
-  ChannelCli::instance().sendWelcomeNotice();
+  CliAssistant::instance().sendWelcomeNotice();
 
   Serial.println("[RO-mesh] Companion ready. System virtual contact active.");
 }
@@ -105,10 +105,10 @@ void loop() {
 
   // 1. Hardware button handling (Double-press arm SOS, 5s hold cancel SOS)
   bool btn_pressed = (digitalRead(PIN_USER_BTN) == USER_BTN_PRESSED);
-  T1000eSos::instance().onButtonEvent(btn_pressed, now_ms);
+  SosT1000e::instance().onButtonEvent(btn_pressed, now_ms);
 
   // 2. SOS and Telemetry updates
-  T1000eSos::instance().update(now_ms);
+  SosT1000e::instance().update(now_ms);
   TelemetryBeacon::instance().update(now_ms);
 
   // 3. Handle Serial input / chat simulation
@@ -116,8 +116,8 @@ void loop() {
     String line = Serial.readStringUntil('\n');
     line.trim();
     if (line.length() > 0) {
-      // Pass directly to ChannelCli (handles /slash commands and chat messages)
-      bool handled = ChannelCli::instance().handleMessage(nullptr, false, line.c_str());
+      // Pass directly to CliAssistant (handles /slash commands and chat messages)
+      bool handled = CliAssistant::instance().handleMessage(nullptr, false, line.c_str());
       if (!handled) {
         Serial.printf("[CHAT ECHO] %s\n", line.c_str());
       }

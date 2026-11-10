@@ -1,21 +1,21 @@
-#include "DeterministicAdverts.h"
+#include "SmartAdverts.h"
 #include <string.h>
 
 namespace ro_mesh {
 
-DeterministicAdverts& DeterministicAdverts::instance() {
-    static DeterministicAdverts inst;
+SmartAdverts& SmartAdverts::instance() {
+    static SmartAdverts inst;
     return inst;
 }
 
-DeterministicAdverts::DeterministicAdverts()
+SmartAdverts::SmartAdverts()
     : _slot_offset_sec(0),
       _next_tx_sec(0),
       _last_tx_sec(0),
       _initialized(false) {
 }
 
-uint32_t DeterministicAdverts::computeSlotOffset(const uint8_t* pubkey) {
+uint32_t SmartAdverts::computeSlotOffset(const uint8_t* pubkey) {
     if (!pubkey) return 3600; // fallback 1 hour
 
     // FNV-1a 32-bit hash
@@ -30,7 +30,7 @@ uint32_t DeterministicAdverts::computeSlotOffset(const uint8_t* pubkey) {
     return offset;
 }
 
-void DeterministicAdverts::scheduleNextTx(uint32_t now_sec) {
+void SmartAdverts::scheduleNextTx(uint32_t now_sec) {
     uint32_t current_cycle_base = (now_sec / CYCLE_DURATION_SEC) * CYCLE_DURATION_SEC;
     uint32_t candidate = current_cycle_base + _slot_offset_sec;
 
@@ -47,13 +47,13 @@ void DeterministicAdverts::scheduleNextTx(uint32_t now_sec) {
     _next_tx_sec = candidate;
 }
 
-void DeterministicAdverts::init(const uint8_t* node_pubkey) {
+void SmartAdverts::init(const uint8_t* node_pubkey) {
     _slot_offset_sec = computeSlotOffset(node_pubkey);
     _last_tx_sec = 0;
     _initialized = true;
 }
 
-bool DeterministicAdverts::shouldTransmitAdvert(uint32_t now_sec) {
+bool SmartAdverts::shouldTransmitAdvert(uint32_t now_sec) {
     if (!_initialized) return false;
 
     if (_next_tx_sec == 0) {
@@ -67,12 +67,12 @@ bool DeterministicAdverts::shouldTransmitAdvert(uint32_t now_sec) {
     return (now_sec >= _next_tx_sec);
 }
 
-void DeterministicAdverts::recordAdvertTransmitted(uint32_t now_sec) {
+void SmartAdverts::recordAdvertTransmitted(uint32_t now_sec) {
     _last_tx_sec = now_sec;
     scheduleNextTx(now_sec);
 }
 
-void DeterministicAdverts::triggerImmediate() {
+void SmartAdverts::triggerImmediate() {
     _next_tx_sec = 1; // Forces trigger on next loop
 }
 

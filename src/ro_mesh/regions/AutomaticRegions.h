@@ -2,22 +2,22 @@
 
 #include <Arduino.h>
 #include <helpers/RegionMap.h>
-#include "ro_regions.h"
+#include "RomanianRegions.h"
 
 namespace ro_mesh {
 
 typedef void (*SystemNotificationCallback)(const char* message);
 
-class AutoRegionsRO {
+class AutomaticRegions {
   static SystemNotificationCallback _notify_cb;
   char _active_scope[32];
   bool _initialized;
 
-  AutoRegionsRO();
+  AutomaticRegions();
 
 public:
-  static AutoRegionsRO& instance() {
-    static AutoRegionsRO inst;
+  static AutomaticRegions& instance() {
+    static AutomaticRegions inst;
     return inst;
   }
 

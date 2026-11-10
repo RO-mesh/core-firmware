@@ -1,5 +1,5 @@
 #include "TelemetryBeacon.h"
-#include "ChannelCli.h"
+#include "CliAssistant.h"
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -42,7 +42,7 @@ bool TelemetryBeacon::setTargetChannel(const char* channel_name) {
 
     // Strict safety bar: Never allow automatic telemetry spam on Public / #public
     if (strcasecmp(channel_name, "Public") == 0 || strcasecmp(channel_name, "#public") == 0) {
-        ChannelCli::instance().postSystemNotification("Warning: Telemetry is strictly barred from the Public channel to protect RF airtime. Routed to #romania.");
+        CliAssistant::instance().postSystemNotification("Warning: Telemetry is strictly barred from the Public channel to protect RF airtime. Routed to #romania.");
         strncpy(_config.target_channel, "#romania", sizeof(_config.target_channel) - 1);
         return false;
     }

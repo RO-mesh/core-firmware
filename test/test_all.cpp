@@ -3,22 +3,22 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../src/ro_mesh/regions/ro_regions.h"
-#include "../src/ro_mesh/regions/AutoRegionsRO.h"
-#include "../src/ro_mesh/hal/AdaptiveTier.h"
-#include "../ro_mesh/hal/PaGainLimiter.h"
+#include "../src/ro_mesh/regions/RomanianRegions.h"
+#include "../src/ro_mesh/regions/AutomaticRegions.h"
+#include "../src/ro_mesh/hal/AutomaticTiers.h"
+#include "../ro_mesh/hal/GainEngine.h"
 #include "../src/ro_mesh/filter/QuarantineEngine.h"
 #include "../src/ro_mesh/filter/BatteryGate.h"
-#include "../src/ro_mesh/filter/PacketFilter.h"
-#include "../src/ro_mesh/switcher/PresetCutover.h"
-#include "../src/ro_mesh/switcher/EmergencyProfileSwitcher.h"
-#include "../src/ro_mesh/advert/DeterministicAdverts.h"
-#include "../src/ro_mesh/companion/T1000eSos.h"
-#include "../src/ro_mesh/companion/ChannelCli.h"
+#include "../src/ro_mesh/filter/FilterEngine.h"
+#include "../src/ro_mesh/switcher/RomanianPresets.h"
+#include "../src/ro_mesh/switcher/PresetEngine.h"
+#include "../src/ro_mesh/advert/SmartAdverts.h"
+#include "../src/ro_mesh/companion/SosT1000e.h"
+#include "../src/ro_mesh/companion/CliAssistant.h"
 #include "../src/ro_mesh/companion/TelemetryBeacon.h"
-#include "../src/ro_mesh/companion/SystemVirtualContact.h"
-#include "../src/ro_mesh/companion/DefaultChannels.h"
-#include "../src/ro_mesh/companion/MessageStore.h"
+#include "../src/ro_mesh/companion/CliContact.h"
+#include "../src/ro_mesh/companion/RomanianChannels.h"
+#include "../src/ro_mesh/companion/MessageStorage.h"
 
 MockSerial Serial;
 
@@ -105,13 +105,13 @@ void run_test_regions() {
     const CountyEntry* non_conforming = findCountyFromNodeName("CustomNode123");
     assert(non_conforming == nullptr); // No county match
 
-    // AutoRegionsRO initialization with non-conforming name -> defaults to #ro
-    AutoRegionsRO::instance().init(0.0, 0.0, "MyStationBeta");
-    assert(strcmp(AutoRegionsRO::instance().getActiveScope(), "#ro") == 0);
+    // AutomaticRegions initialization with non-conforming name -> defaults to #ro
+    AutomaticRegions::instance().init(0.0, 0.0, "MyStationBeta");
+    assert(strcmp(AutomaticRegions::instance().getActiveScope(), "#ro") == 0);
 
-    // AutoRegionsRO with conforming name
-    AutoRegionsRO::instance().init(0.0, 0.0, "RO-TM-01");
-    assert(strcmp(AutoRegionsRO::instance().getActiveScope(), "ro-tm") == 0);
+    // AutomaticRegions with conforming name
+    AutomaticRegions::instance().init(0.0, 0.0, "RO-TM-01");
+    assert(strcmp(AutomaticRegions::instance().getActiveScope(), "ro-tm") == 0);
 
     printf("  -> Romanian Regions & AutoRegions tests passed!\n");
 }
@@ -178,17 +178,17 @@ void run_test_quarantine() {
 void run_test_tier() {
     printf("[TEST] Running Adaptive Tier Tests...\n");
 
-    AdaptiveTier::instance().setMode(TierMode::Manual);
+    AutomaticTiers::instance().setMode(TierMode::Manual);
     
     // Tier 0 (Backbone mountain-top infrastructure)
-    AdaptiveTier::instance().setManualTier(0);
-    TierDelays d0 = AdaptiveTier::instance().getActiveDelays();
+    AutomaticTiers::instance().setManualTier(0);
+    TierDelays d0 = AutomaticTiers::instance().getActiveDelays();
     assert(d0.rxdelay == 3.0f);
     assert(d0.txdelay == 2.0f);
 
     // Tier 3 (Local edge / dense suburban)
-    AdaptiveTier::instance().setManualTier(3);
-    TierDelays d3 = AdaptiveTier::instance().getActiveDelays();
+    AutomaticTiers::instance().setManualTier(3);
+    TierDelays d3 = AutomaticTiers::instance().getActiveDelays();
     assert(d3.rxdelay == 3.0f);
     assert(d3.txdelay == 0.3f);
 
@@ -197,17 +197,17 @@ void run_test_tier() {
 
     // CLI commands: get tier, set tier
     char reply[128];
-    bool get_cmd = AdaptiveTier::instance().handleCommand("get tier", reply, sizeof(reply));
+    bool get_cmd = AutomaticTiers::instance().handleCommand("get tier", reply, sizeof(reply));
     assert(get_cmd == true);
     assert(strstr(reply, "T3") != nullptr);
 
-    bool set_auto = AdaptiveTier::instance().handleCommand("set tier auto", reply, sizeof(reply));
+    bool set_auto = AutomaticTiers::instance().handleCommand("set tier auto", reply, sizeof(reply));
     assert(set_auto == true);
-    assert(AdaptiveTier::instance().getMode() == TierMode::Auto);
+    assert(AutomaticTiers::instance().getMode() == TierMode::Auto);
 
-    bool set_off = AdaptiveTier::instance().handleCommand("set tier off", reply, sizeof(reply));
+    bool set_off = AutomaticTiers::instance().handleCommand("set tier off", reply, sizeof(reply));
     assert(set_off == true);
-    assert(AdaptiveTier::instance().getMode() == TierMode::Disabled);
+    assert(AutomaticTiers::instance().getMode() == TierMode::Disabled);
 
     printf("  -> Adaptive Tier tests passed!\n");
 }
@@ -218,29 +218,29 @@ void run_test_tier() {
 void run_test_pa_limiter() {
     printf("[TEST] Running PA Gain Limiter Tests...\n");
 
-    PaGainLimiter::instance().setLimiterEnabled(true);
-    PaGainLimiter::instance().setLegalLimit(22); // Max +22 dBm conducted ERP
-    PaGainLimiter::instance().setPaGain(14);     // +14 dB external PA (e.g. 1W board)
+    GainEngine::instance().setLimiterEnabled(true);
+    GainEngine::instance().setLegalLimit(22); // Max +22 dBm conducted ERP
+    GainEngine::instance().setPaGain(14);     // +14 dB external PA (e.g. 1W board)
 
     // With target power +22 dBm and +14 dB PA, transceiver drive must be clamped to +8 dBm
-    int8_t clamped_drive = PaGainLimiter::instance().clampTransceiverDrive(22);
+    int8_t clamped_drive = GainEngine::instance().clampTransceiverDrive(22);
     assert(clamped_drive == 8);
 
     // Resulting effective conducted power: 8 + 14 = 22 dBm
-    int8_t effective_out = PaGainLimiter::instance().getEffectiveConductedPower(clamped_drive);
+    int8_t effective_out = GainEngine::instance().getEffectiveConductedPower(clamped_drive);
     assert(effective_out == 22);
 
     // When limiter is disabled, transceiver drive is not attenuated
-    PaGainLimiter::instance().setLimiterEnabled(false);
-    assert(PaGainLimiter::instance().clampTransceiverDrive(22) == 22);
+    GainEngine::instance().setLimiterEnabled(false);
+    assert(GainEngine::instance().clampTransceiverDrive(22) == 22);
 
     // CLI commands
     char reply[128];
-    PaGainLimiter::instance().handleCommand("set pa.limiter on", reply, sizeof(reply));
-    assert(PaGainLimiter::instance().isLimiterEnabled() == true);
+    GainEngine::instance().handleCommand("set pa.limiter on", reply, sizeof(reply));
+    assert(GainEngine::instance().isLimiterEnabled() == true);
 
-    PaGainLimiter::instance().handleCommand("set pa.gain 12", reply, sizeof(reply));
-    assert(PaGainLimiter::instance().getPaGain() == 12);
+    GainEngine::instance().handleCommand("set pa.gain 12", reply, sizeof(reply));
+    assert(GainEngine::instance().getPaGain() == 12);
 
     printf("  -> PA Gain Limiter tests passed!\n");
 }
@@ -252,11 +252,11 @@ void run_test_sos_and_cli() {
     printf("[TEST] Running T1000-E SOS & Channel CLI Tests...\n");
 
     // Initialize Virtual Contact & Channels
-    ChannelCli::instance().init();
-    ChannelCli::instance().setInjectCallback(testInjectSystemMessage);
+    CliAssistant::instance().init();
+    CliAssistant::instance().setInjectCallback(testInjectSystemMessage);
 
-    T1000eSos::instance().init();
-    T1000eSos::instance().setSendCallback(testSendSosPacket);
+    SosT1000e::instance().init();
+    SosT1000e::instance().setSendCallback(testSendSosPacket);
 
     // 1. Virtual System Contact Verification
     assert(isSystemContact(SYSTEM_VIRTUAL_PUBKEY) == true);
@@ -264,74 +264,74 @@ void run_test_sos_and_cli() {
     assert(isSystemContact(other_pubkey) == false);
 
     // 2. Automated Welcome Message Verification
-    ChannelCli::instance().sendWelcomeNotice();
+    CliAssistant::instance().sendWelcomeNotice();
     assert(strstr(g_last_system_msg, "Welcome to RO-mesh") != nullptr);
     assert(strstr(g_last_system_msg, "/help") != nullptr);
 
     // 3. Channel CLI Slash Commands (Zero Airtime Interception)
     // /help
-    bool handled_help = ChannelCli::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/help");
+    bool handled_help = CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/help");
     assert(handled_help == true);
     assert(strstr(g_last_system_msg, "/status") != nullptr);
     assert(strstr(g_last_system_msg, "/sos") != nullptr);
 
     // /status
-    bool handled_status = ChannelCli::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/status");
+    bool handled_status = CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/status");
     assert(handled_status == true);
     assert(strstr(g_last_system_msg, "RO-mesh Status") != nullptr);
     assert(strstr(g_last_system_msg, "#ro") != nullptr);
 
     // /battery
-    ChannelCli::instance().setBattery(85, 3.95f);
-    ChannelCli::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/battery");
+    CliAssistant::instance().setBattery(85, 3.95f);
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/battery");
     assert(strstr(g_last_system_msg, "85%") != nullptr);
 
     // /info
-    ChannelCli::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/info");
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/info");
     assert(strstr(g_last_system_msg, "focaldistorsion") != nullptr);
 
     // 4. Hardware Button SOS State Machine
     // Double click sequence: Press -> Release -> Press -> Release within 400ms
     uint32_t t = 1000;
-    T1000eSos::instance().onButtonEvent(true, t);       // Click 1 down
+    SosT1000e::instance().onButtonEvent(true, t);       // Click 1 down
     t += 100;
-    T1000eSos::instance().onButtonEvent(false, t);      // Click 1 up
+    SosT1000e::instance().onButtonEvent(false, t);      // Click 1 up
     t += 150;
-    T1000eSos::instance().onButtonEvent(true, t);       // Click 2 down
+    SosT1000e::instance().onButtonEvent(true, t);       // Click 2 down
     t += 100;
-    T1000eSos::instance().onButtonEvent(false, t);      // Click 2 up
+    SosT1000e::instance().onButtonEvent(false, t);      // Click 2 up
 
     // Verify armed countdown
-    assert(T1000eSos::instance().isArmed() == true);
-    assert(T1000eSos::instance().getState() == SosState::ARMED_COUNTDOWN);
+    assert(SosT1000e::instance().isArmed() == true);
+    assert(SosT1000e::instance().getState() == SosState::ARMED_COUNTDOWN);
 
     // 5-second long hold gesture to cancel/disarm
     t += 1000;
-    T1000eSos::instance().onButtonEvent(true, t);       // Hold down
+    SosT1000e::instance().onButtonEvent(true, t);       // Hold down
     t += 5100;                                         // 5.1s later
-    T1000eSos::instance().onButtonEvent(false, t);      // Release
+    SosT1000e::instance().onButtonEvent(false, t);      // Release
 
     // Verify disarmed
-    assert(T1000eSos::instance().getState() == SosState::RESOLVED);
+    assert(SosT1000e::instance().getState() == SosState::RESOLVED);
 
     // Trigger SOS via CLI and simulate countdown expiry
-    T1000eSos::instance().triggerManualSos("CLI");
-    assert(T1000eSos::instance().isArmed() == true);
-    T1000eSos::instance().update(t);
+    SosT1000e::instance().triggerManualSos("CLI");
+    assert(SosT1000e::instance().isArmed() == true);
+    SosT1000e::instance().update(t);
 
-    T1000eSos::instance().updateGps(45.6579, 25.6012, 650.0f, true); // Brasov coordinates
-    T1000eSos::instance().updateBattery(90);
+    SosT1000e::instance().updateGps(45.6579, 25.6012, 650.0f, true); // Brasov coordinates
+    SosT1000e::instance().updateBattery(90);
 
     // Advance time past 15 seconds countdown
     t += 16000;
-    T1000eSos::instance().update(t);
+    SosT1000e::instance().update(t);
 
-    assert(T1000eSos::instance().isActive() == true);
+    assert(SosT1000e::instance().isActive() == true);
     assert(strstr(g_last_sos_msg, "[EMERGENCY-SOS]") != nullptr);
     assert(strstr(g_last_sos_msg, "https://maps.google.com") != nullptr);
 
     // Cancel active SOS -> resolution packet
-    T1000eSos::instance().cancelSos("Cleared");
+    SosT1000e::instance().cancelSos("Cleared");
     assert(strstr(g_last_sos_msg, "[SOS-RESOLVED]") != nullptr);
 
     printf("  -> T1000-E SOS & Channel CLI tests passed!\n");
@@ -361,16 +361,16 @@ void run_test_filter_and_battery() {
     BatteryGate::instance().updateVoltage(3.65f);
     assert(BatteryGate::instance().isRelayAllowed() == true);
 
-    // PacketFilter evaluation
-    PacketFilter::instance().init(7);
+    // FilterEngine evaluation
+    FilterEngine::instance().init(7);
     uint8_t sender[32] = {0x01, 0x02, 0x03};
 
     // Normal packet: ALLOW
-    FilterVerdict v1 = PacketFilter::instance().evaluate(sender, false, 2, 64, 1000);
+    FilterVerdict v1 = FilterEngine::instance().evaluate(sender, false, 2, 64, 1000);
     assert(v1 == FilterVerdict::ALLOW);
 
     // Packet with 8 hops (> max 7): DROP_HOP_LIMIT
-    FilterVerdict v2 = PacketFilter::instance().evaluate(sender, false, 8, 64, 1000);
+    FilterVerdict v2 = FilterEngine::instance().evaluate(sender, false, 8, 64, 1000);
     assert(v2 == FilterVerdict::DROP_HOP_LIMIT);
 
     // Strict Telemetry Bar from Public Channel
@@ -392,11 +392,11 @@ void run_test_deterministic_adverts() {
     uint8_t node1[32] = {0x12, 0x34, 0x56, 0x78};
     uint8_t node2[32] = {0xAA, 0xBB, 0xCC, 0xDD};
 
-    DeterministicAdverts::instance().init(node1);
-    uint32_t slot1 = DeterministicAdverts::instance().getSlotOffsetSec();
+    SmartAdverts::instance().init(node1);
+    uint32_t slot1 = SmartAdverts::instance().getSlotOffsetSec();
 
-    DeterministicAdverts::instance().init(node2);
-    uint32_t slot2 = DeterministicAdverts::instance().getSlotOffsetSec();
+    SmartAdverts::instance().init(node2);
+    uint32_t slot2 = SmartAdverts::instance().getSlotOffsetSec();
 
     // Verify slots are within 23-hour window
     assert(slot1 < 23 * 3600);

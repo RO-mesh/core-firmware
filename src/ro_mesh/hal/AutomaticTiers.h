@@ -29,7 +29,7 @@ struct TierBucket {
   void addNeighbor(uint32_t node_id);
 };
 
-class AdaptiveTier {
+class AutomaticTiers {
   TierMode _mode;
   uint8_t _active_tier;      // 0 to 3
   uint8_t _manual_tier;      // 0 to 3
@@ -42,11 +42,11 @@ class AdaptiveTier {
   TierBucket _buckets[3];     // 3 buckets x 5 min = 15 min rolling window
   uint8_t _active_bucket_idx;
 
-  AdaptiveTier();
+  AutomaticTiers();
 
 public:
-  static AdaptiveTier& instance() {
-    static AdaptiveTier inst;
+  static AutomaticTiers& instance() {
+    static AutomaticTiers inst;
     return inst;
   }
 

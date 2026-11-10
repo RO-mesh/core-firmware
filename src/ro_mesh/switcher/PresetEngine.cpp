@@ -1,5 +1,5 @@
-#include "EmergencyProfileSwitcher.h"
-#include "PresetCutover.h"
+#include "PresetEngine.h"
+#include "RomanianPresets.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -7,7 +7,7 @@
 
 namespace ro_mesh {
 
-EmergencyProfileSwitcher::EmergencyProfileSwitcher()
+PresetEngine::PresetEngine()
   : _enabled(true),
     _channel_set(false),
     _active_preset_id(1),
@@ -26,25 +26,25 @@ EmergencyProfileSwitcher::EmergencyProfileSwitcher()
   memset(_tokens, 0, sizeof(_tokens));
 }
 
-void EmergencyProfileSwitcher::init() {
+void PresetEngine::init() {
   _enabled = true;
   _active_preset_id = 1;
-  PresetCutover::initPresets();
+  RomanianPresets::initPresets();
 }
 
-void EmergencyProfileSwitcher::setSentryChannel(const char* channel_name) {
+void PresetEngine::setSentryChannel(const char* channel_name) {
   if (channel_name && strlen(channel_name) > 0) {
     strncpy(_sentry_channel, channel_name, sizeof(_sentry_channel) - 1);
     _sentry_channel[sizeof(_sentry_channel) - 1] = '\0';
   }
 }
 
-void EmergencyProfileSwitcher::clearTokens() {
+void PresetEngine::clearTokens() {
   memset(_tokens, 0, sizeof(_tokens));
   _num_tokens = 0;
 }
 
-bool EmergencyProfileSwitcher::addToken(const char* token) {
+bool PresetEngine::addToken(const char* token) {
   if (!token || strlen(token) == 0 || _num_tokens >= 10) return false;
 
   // Check duplicate
@@ -59,7 +59,7 @@ bool EmergencyProfileSwitcher::addToken(const char* token) {
   return true;
 }
 
-bool EmergencyProfileSwitcher::isTokenBurned(const char* token) const {
+bool PresetEngine::isTokenBurned(const char* token) const {
   if (!token) return true;
   for (uint8_t i = 0; i < _num_tokens; i++) {
     if (strcasecmp(_tokens[i].token, token) == 0) {
@@ -69,7 +69,7 @@ bool EmergencyProfileSwitcher::isTokenBurned(const char* token) const {
   return true; // Unknown token is treated as invalid/burned
 }
 
-bool EmergencyProfileSwitcher::burnToken(const char* token) {
+bool PresetEngine::burnToken(const char* token) {
   if (!token) return false;
   for (uint8_t i = 0; i < _num_tokens; i++) {
     if (strcasecmp(_tokens[i].token, token) == 0) {
@@ -83,7 +83,7 @@ bool EmergencyProfileSwitcher::burnToken(const char* token) {
   return false;
 }
 
-bool EmergencyProfileSwitcher::isJobSeen(const char* job_id) const {
+bool PresetEngine::isJobSeen(const char* job_id) const {
   if (!job_id || !job_id[0]) return true;
   for (int i = 0; i < 32; i++) {
     if (strcmp(_seen_jobs[i], job_id) == 0) return true;
@@ -91,14 +91,14 @@ bool EmergencyProfileSwitcher::isJobSeen(const char* job_id) const {
   return false;
 }
 
-void EmergencyProfileSwitcher::markJobSeen(const char* job_id) {
+void PresetEngine::markJobSeen(const char* job_id) {
   if (!job_id || !job_id[0]) return;
   strncpy(_seen_jobs[_seen_idx], job_id, sizeof(_seen_jobs[_seen_idx]) - 1);
   _seen_jobs[_seen_idx][sizeof(_seen_jobs[_seen_idx]) - 1] = '\0';
   _seen_idx = (_seen_idx + 1) % 32;
 }
 
-bool EmergencyProfileSwitcher::hasTag(const char* tag) const {
+bool PresetEngine::hasTag(const char* tag) const {
   if (!tag) return false;
   for (uint8_t i = 0; i < _num_tags; i++) {
     if (strcasecmp(_tags[i], tag) == 0) return true;
@@ -106,14 +106,14 @@ bool EmergencyProfileSwitcher::hasTag(const char* tag) const {
   return false;
 }
 
-bool EmergencyProfileSwitcher::addTag(const char* tag) {
+bool PresetEngine::addTag(const char* tag) {
   if (!tag || _num_tags >= 8) return false;
   if (hasTag(tag)) return true;
   strncpy(_tags[_num_tags++], tag, 15);
   return true;
 }
 
-bool EmergencyProfileSwitcher::removeTag(const char* tag) {
+bool PresetEngine::removeTag(const char* tag) {
   if (!tag) return false;
   for (uint8_t i = 0; i < _num_tags; i++) {
     if (strcasecmp(_tags[i], tag) == 0) {
@@ -127,7 +127,7 @@ bool EmergencyProfileSwitcher::removeTag(const char* tag) {
   return false;
 }
 
-bool EmergencyProfileSwitcher::parseSteganographicTrigger(const char* message, uint8_t& out_preset, char* out_token, size_t max_token_len) {
+bool PresetEngine::parseSteganographicTrigger(const char* message, uint8_t& out_preset, char* out_token, size_t max_token_len) {
   if (!message || !out_token || max_token_len == 0) return false;
 
   // Format 1: WX Weather Telemetry
@@ -178,7 +178,7 @@ bool EmergencyProfileSwitcher::parseSteganographicTrigger(const char* message, u
   return false;
 }
 
-bool EmergencyProfileSwitcher::processMessage(const char* message, uint32_t current_ts, CommonRadioPrefs& radio_prefs, RebootFunction reboot_fn) {
+bool PresetEngine::processMessage(const char* message, uint32_t current_ts, CommonRadioPrefs& radio_prefs, RebootFunction reboot_fn) {
   if (!_enabled || !message) return false;
 
   // 1. Check for inconspicuous steganographic trigger with single-use token burn
@@ -188,7 +188,7 @@ bool EmergencyProfileSwitcher::processMessage(const char* message, uint32_t curr
     // Attempt single-use token burn
     if (burnToken(steg_token)) {
       _active_preset_id = steg_preset;
-      PresetCutover::applyPreset(steg_preset, radio_prefs);
+      RomanianPresets::applyPreset(steg_preset, radio_prefs);
       if (reboot_fn) {
         reboot_fn();
       }
@@ -266,7 +266,7 @@ bool EmergencyProfileSwitcher::processMessage(const char* message, uint32_t curr
   // Immediate execution
   if (new_preset >= 1 && new_preset <= 3) {
     _active_preset_id = new_preset;
-    PresetCutover::applyPreset(new_preset, radio_prefs);
+    RomanianPresets::applyPreset(new_preset, radio_prefs);
   }
 
   if (do_reboot && reboot_fn) {
@@ -276,12 +276,12 @@ bool EmergencyProfileSwitcher::processMessage(const char* message, uint32_t curr
   return true;
 }
 
-void EmergencyProfileSwitcher::loop(uint32_t current_ts, CommonRadioPrefs& radio_prefs, RebootFunction reboot_fn) {
+void PresetEngine::loop(uint32_t current_ts, CommonRadioPrefs& radio_prefs, RebootFunction reboot_fn) {
   if (_has_scheduled_cutover && current_ts >= _scheduled_at_ts) {
     _has_scheduled_cutover = false;
     if (_scheduled_preset_id >= 1 && _scheduled_preset_id <= 3) {
       _active_preset_id = _scheduled_preset_id;
-      PresetCutover::applyPreset(_scheduled_preset_id, radio_prefs);
+      RomanianPresets::applyPreset(_scheduled_preset_id, radio_prefs);
     }
     if (reboot_fn) {
       reboot_fn();
@@ -289,7 +289,7 @@ void EmergencyProfileSwitcher::loop(uint32_t current_ts, CommonRadioPrefs& radio
   }
 }
 
-bool EmergencyProfileSwitcher::handleCommand(const char* cmd, char* reply, size_t max_len) {
+bool PresetEngine::handleCommand(const char* cmd, char* reply, size_t max_len) {
   if (!cmd || !reply || max_len == 0) return false;
 
   // 1. sentry status
@@ -342,7 +342,7 @@ bool EmergencyProfileSwitcher::handleCommand(const char* cmd, char* reply, size_
     int sf = 0;
     int cr = 0;
     if (sscanf(cmd + 11, "%d %f %f %d %d", &id, &freq, &bw, &sf, &cr) >= 5) {
-      if (PresetCutover::setPreset((uint8_t)id, freq, bw, (uint8_t)sf, (uint8_t)cr)) {
+      if (RomanianPresets::setPreset((uint8_t)id, freq, bw, (uint8_t)sf, (uint8_t)cr)) {
         snprintf(reply, max_len, "OK - Preset %d configured (%.3f MHz, %.1f kHz, SF%d, CR4/%d)",
                  id, (double)freq, (double)bw, sf, cr);
         return true;

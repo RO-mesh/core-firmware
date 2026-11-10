@@ -25,7 +25,7 @@ struct RadioPreset {
   }
 };
 
-class PresetCutover {
+class RomanianPresets {
   static RadioPreset s_presets[3];
   static bool s_initialized;
 
