@@ -309,3 +309,4 @@ An interactive showcase of the firmware with live delay calculators, region maps
 ## License
 
 Derived from [MeshCore](https://github.com/meshcore-dev/MeshCore). Distributed under the GNU General Public License v3.0 (or matching upstream license).
+
