@@ -13,6 +13,16 @@ struct RadioPreset {
   uint8_t sf;         // 7 to 12
   uint8_t cr;         // 5 to 8 (4/5 to 4/8)
   int8_t target_dbm;  // Target conducted power at antenna
+
+  RadioPreset() : id(0), freq(0.0f), bw(0.0f), sf(0), cr(0), target_dbm(0) {
+    name[0] = '\0';
+  }
+
+  RadioPreset(uint8_t _id, const char* _name, float _f, float _bw, uint8_t _sf, uint8_t _cr, int8_t _pwr)
+    : id(_id), freq(_f), bw(_bw), sf(_sf), cr(_cr), target_dbm(_pwr) {
+    strncpy(name, _name, sizeof(name) - 1);
+    name[sizeof(name) - 1] = '\0';
+  }
 };
 
 class PresetCutover {

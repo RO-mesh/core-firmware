@@ -83,15 +83,38 @@ jobs:
       - name: Build Firmware (${{ matrix.environment }})
         run: |
           pio run -e ${{ matrix.environment }}
+          if [[ "${{ matrix.environment }}" == *"heltec"* || "${{ matrix.environment }}" == *"tbeam"* ]]; then
+            pio run -t mergebin -e ${{ matrix.environment }}
+          fi
+          if [[ "${{ matrix.environment }}" == *"t1000e"* || "${{ matrix.environment }}" == *"rak"* ]]; then
+            python3 bin/uf2conv/uf2conv.py .pio/build/${{ matrix.environment }}/firmware.hex -c -o .pio/build/${{ matrix.environment }}/firmware.uf2 -f 0xADA52840
+          fi
+
+      - name: Stage Artifacts
+        run: |
+          mkdir -p artifacts
+          if [ -f .pio/build/${{ matrix.environment }}/firmware-merged.bin ]; then
+            cp .pio/build/${{ matrix.environment }}/firmware-merged.bin artifacts/RO-mesh-${{ matrix.environment }}-merged.bin
+          fi
+          if [ -f .pio/build/${{ matrix.environment }}/firmware.bin ]; then
+            cp .pio/build/${{ matrix.environment }}/firmware.bin artifacts/RO-mesh-${{ matrix.environment }}.bin
+          fi
+          if [ -f .pio/build/${{ matrix.environment }}/firmware.hex ]; then
+            cp .pio/build/${{ matrix.environment }}/firmware.hex artifacts/RO-mesh-${{ matrix.environment }}.hex
+          fi
+          if [ -f .pio/build/${{ matrix.environment }}/firmware.uf2 ]; then
+            cp .pio/build/${{ matrix.environment }}/firmware.uf2 artifacts/RO-mesh-${{ matrix.environment }}.uf2
+          fi
+          if [ -f .pio/build/${{ matrix.environment }}/firmware.zip ]; then
+            cp .pio/build/${{ matrix.environment }}/firmware.zip artifacts/RO-mesh-${{ matrix.environment }}.zip
+          fi
+          ls -la artifacts/
 
       - name: Archive Built Binaries
         uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ matrix.environment }}
-          path: |
-            .pio/build/${{ matrix.environment }}/*.bin
-            .pio/build/${{ matrix.environment }}/*.hex
-            .pio/build/${{ matrix.environment }}/*.uf2
+          path: artifacts/*
 
   prerelease:
     name: Publish GitHub Pre-Release
@@ -111,7 +134,7 @@ jobs:
         id: pkg
         run: |
           mkdir -p dist
-          find release-binaries -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.uf2" \) -exec cp {} dist/ \;
+          find release-binaries -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.uf2" -o -name "*.zip" \) -exec cp {} dist/ \;
           ls -la dist/
 
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then

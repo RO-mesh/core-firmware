@@ -11,9 +11,9 @@ bool PresetCutover::s_initialized = false;
 void PresetCutover::initPresets() {
   if (s_initialized) return;
 
-  s_presets[0] = { 1, "Official MeshCore Narrow", 869.618f, 62.5f, 8, 8, 22 };
-  s_presets[1] = { 2, "Narrow Balanced SF8 CR5",  869.618f, 62.5f, 8, 5, 22 };
-  s_presets[2] = { 3, "Narrow Fast SF7 CR5",      869.618f, 62.5f, 7, 5, 22 };
+  s_presets[0] = RadioPreset(1, "Official MeshCore Narrow", 869.618f, 62.5f, 8, 8, 22);
+  s_presets[1] = RadioPreset(2, "Narrow Balanced SF8 CR5",  869.618f, 62.5f, 8, 5, 22);
+  s_presets[2] = RadioPreset(3, "Narrow Fast SF7 CR5",      869.618f, 62.5f, 7, 5, 22);
   s_initialized = true;
 }
 

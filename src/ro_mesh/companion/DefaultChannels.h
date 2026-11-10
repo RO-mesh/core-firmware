@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
-#include <DataStore.h>
-#include <helpers/TxtDataHelpers.h>
+#include <Mesh.h>
+#include <helpers/ChannelDetails.h>
 
 namespace ro_mesh {
 
@@ -39,69 +39,10 @@ static const uint8_t ROMESH_CLI_PSK[16] = {
   0x60, 0xd4, 0x8b, 0xe6, 0xce, 0x28, 0xad, 0x5e
 };
 
-/**
- * Pre-populates the standard Romanian and system channels into DataStore if not present.
- * Ensures an instant zero-setup onboarding experience when connecting via the companion app.
- */
-inline void initDefaultChannels(DataStore& store, bool isT1000e = false) {
-  // Check if Public channel is already provisioned
-  ChannelDetails ch;
-  bool hasPublic = false;
-  bool hasRomania = false;
-  bool hasSos = false;
-  bool hasAlerte = false;
-  bool hasCli = false;
-
-  for (int i = 0; i < store.getNumChannels(); i++) {
-    if (store.getChannel(i, ch)) {
-      if (strcmp(ch.channel_name, "Public") == 0) hasPublic = true;
-      if (strcmp(ch.channel_name, "#romania") == 0) hasRomania = true;
-      if (strcmp(ch.channel_name, "#sos") == 0) hasSos = true;
-      if (strcmp(ch.channel_name, "#alerte") == 0) hasAlerte = true;
-      if (strcmp(ch.channel_name, "RO-mesh T1000E CLI") == 0 || strcmp(ch.channel_name, "System") == 0) hasCli = true;
-    }
-  }
-
-  // 1. Official Global Public Channel
-  if (!hasPublic) {
-    memset(&ch, 0, sizeof(ch));
-    strncpy(ch.channel_name, "Public", sizeof(ch.channel_name) - 1);
-    memcpy(ch.channel_secret, MESHCORE_PUBLIC_PSK, 16);
-    store.saveChannel(store.getNumChannels(), ch);
-  }
-
-  // 2. #romania Channel
-  if (!hasRomania) {
-    memset(&ch, 0, sizeof(ch));
-    strncpy(ch.channel_name, "#romania", sizeof(ch.channel_name) - 1);
-    memcpy(ch.channel_secret, ROMESH_ROMANIA_PSK, 16);
-    store.saveChannel(store.getNumChannels(), ch);
-  }
-
-  // 3. #sos Emergency Channel
-  if (!hasSos) {
-    memset(&ch, 0, sizeof(ch));
-    strncpy(ch.channel_name, "#sos", sizeof(ch.channel_name) - 1);
-    memcpy(ch.channel_secret, ROMESH_SOS_PSK, 16);
-    store.saveChannel(store.getNumChannels(), ch);
-  }
-
-  // 4. #alerte Alert Channel
-  if (!hasAlerte) {
-    memset(&ch, 0, sizeof(ch));
-    strncpy(ch.channel_name, "#alerte", sizeof(ch.channel_name) - 1);
-    memcpy(ch.channel_secret, ROMESH_ALERTE_PSK, 16);
-    store.saveChannel(store.getNumChannels(), ch);
-  }
-
-  // 5. In-Chat CLI Control Channel (strictly for T1000-E companion builds)
-  if (isT1000e && !hasCli) {
-    memset(&ch, 0, sizeof(ch));
-    strncpy(ch.channel_name, "RO-mesh T1000E CLI", sizeof(ch.channel_name) - 1);
-    memcpy(ch.channel_secret, ROMESH_CLI_PSK, 16);
-    store.saveChannel(store.getNumChannels(), ch);
-  }
+inline void populateChannel(ChannelDetails& ch, const char* name, const uint8_t* psk16) {
+  memset(&ch, 0, sizeof(ch));
+  strncpy(ch.name, name, sizeof(ch.name) - 1);
+  memcpy(ch.channel.secret, psk16, 16);
 }
 
 } // namespace ro_mesh
-
