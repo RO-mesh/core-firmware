@@ -2,14 +2,17 @@ name: Build & Release Firmware
 
 on:
   push:
-    branches: [ "main" ]
-    tags: [ "v*" ]
+    branches:
+      - main
+    tags:
+      - 'v*'
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name for the pre-release (e.g. v0.1.0-alpha.1)'
+        description: 'Tag name for manual release (e.g. v0.1.0-alpha.1)'
         required: false
         default: 'v0.1.0-alpha.1'
 
@@ -29,24 +32,19 @@ jobs:
       - name: Compile and Run Native Test Runner
         run: |
           mkdir -p build
-          g++ -std=c++17 -w \
-            -I test \
-            -I src \
-            -I src/ro_mesh \
-            -I lib/MeshCore/src \
+          g++ -std=c++17 -D TESTING -I src -I src/ro_mesh \
             test/test_all.cpp \
-            test/mock_region_map.cpp \
             src/ro_mesh/regions/AutomaticRegions.cpp \
+            src/ro_mesh/filter/QuarantineEngine.cpp \
+            src/ro_mesh/filter/FilterEngine.cpp \
+            src/ro_mesh/filter/BatteryGate.cpp \
             src/ro_mesh/hal/AutomaticTiers.cpp \
             src/ro_mesh/hal/GainEngine.cpp \
-            src/ro_mesh/filter/QuarantineEngine.cpp \
-            src/ro_mesh/filter/BatteryGate.cpp \
-            src/ro_mesh/filter/FilterEngine.cpp \
             src/ro_mesh/switcher/RomanianPresets.cpp \
             src/ro_mesh/switcher/PresetEngine.cpp \
             src/ro_mesh/advert/SmartAdverts.cpp \
-            src/ro_mesh/companion/SosT1000e.cpp \
             src/ro_mesh/companion/CliAssistant.cpp \
+            src/ro_mesh/companion/SosT1000e.cpp \
             src/ro_mesh/companion/TelemetryBeacon.cpp \
             src/ro_mesh/companion/MessageStorage.cpp \
             -o build/test_runner
@@ -93,7 +91,7 @@ jobs:
 
       - name: Stage Artifacts
         run: |
-          mkdir -p artifacts
+          mkdir -p artifacts/primary artifacts/tools
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
           elif [ -n "${{ github.event.inputs.tag_name }}" ]; then
@@ -103,28 +101,39 @@ jobs:
           fi
           echo "Packaging artifacts with version: $VERSION"
 
+          SLUG=$(echo "${{ matrix.environment }}" | tr '_' '-' | tr '[:upper:]' '[:lower:]')
+
+          # ESP32 targets produce factory merged bin and app update bin
           if [ -f .pio/build/${{ matrix.environment }}/firmware-merged.bin ]; then
-            cp .pio/build/${{ matrix.environment }}/firmware-merged.bin artifacts/Core-Firmware-${{ matrix.environment }}-${VERSION}-merged.bin
+            cp .pio/build/${{ matrix.environment }}/firmware-merged.bin artifacts/primary/${SLUG}-core-firmware-${VERSION}-factory.bin
           fi
           if [ -f .pio/build/${{ matrix.environment }}/firmware.bin ]; then
-            cp .pio/build/${{ matrix.environment }}/firmware.bin artifacts/Core-Firmware-${{ matrix.environment }}-${VERSION}.bin
+            cp .pio/build/${{ matrix.environment }}/firmware.bin artifacts/primary/${SLUG}-core-firmware-${VERSION}-update.bin
           fi
-          if [ -f .pio/build/${{ matrix.environment }}/firmware.hex ]; then
-            cp .pio/build/${{ matrix.environment }}/firmware.hex artifacts/Core-Firmware-${{ matrix.environment }}-${VERSION}.hex
-          fi
+
+          # nRF52 targets produce primary UF2
           if [ -f .pio/build/${{ matrix.environment }}/firmware.uf2 ]; then
-            cp .pio/build/${{ matrix.environment }}/firmware.uf2 artifacts/Core-Firmware-${{ matrix.environment }}-${VERSION}.uf2
+            cp .pio/build/${{ matrix.environment }}/firmware.uf2 artifacts/primary/${SLUG}-core-firmware-${VERSION}.uf2
+          fi
+
+          # Developer tools (hex, zip packages) stored for the all-in-one tools bundle
+          if [ -f .pio/build/${{ matrix.environment }}/firmware.hex ]; then
+            cp .pio/build/${{ matrix.environment }}/firmware.hex artifacts/tools/${SLUG}-core-firmware-${VERSION}.hex
           fi
           if [ -f .pio/build/${{ matrix.environment }}/firmware.zip ]; then
-            cp .pio/build/${{ matrix.environment }}/firmware.zip artifacts/Core-Firmware-${{ matrix.environment }}-${VERSION}.zip
+            cp .pio/build/${{ matrix.environment }}/firmware.zip artifacts/tools/${SLUG}-core-firmware-${VERSION}.zip
           fi
-          ls -la artifacts/
+
+          echo "Primary staged assets:"
+          ls -la artifacts/primary/
+          echo "Developer tools staged assets:"
+          ls -la artifacts/tools/
 
       - name: Archive Built Binaries
         uses: actions/upload-artifact@v4
         with:
           name: firmware-${{ matrix.environment }}
-          path: artifacts/*
+          path: artifacts/
 
   prerelease:
     name: Publish GitHub Pre-Release
@@ -143,9 +152,7 @@ jobs:
       - name: Package Release Assets
         id: pkg
         run: |
-          mkdir -p dist
-          find release-binaries -type f \( -name "*.bin" -o -name "*.hex" -o -name "*.uf2" -o -name "*.zip" \) -exec cp {} dist/ \;
-          ls -la dist/
+          mkdir -p dist bundle_staging
 
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
@@ -156,12 +163,78 @@ jobs:
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
+          # Copy primary release assets to dist
+          find release-binaries -path "*/primary/*" -type f -exec cp {} dist/ \;
+
+          # Collect all binaries into bundle_staging for the all-in-one tools archive
+          find release-binaries -type f \( -name "*.bin" -o -name "*.uf2" -o -name "*.hex" -o -name "*.zip" \) -exec cp {} bundle_staging/ \;
+
+          cat << 'EOF' > bundle_staging/README.txt
+RO-mesh Core Firmware All-in-One Tools Bundle
+==============================================
+This archive contains all compiled firmwares and developer packages:
+- *-factory.bin : Complete flash image (@ 0x0000) for ESP32 / ESP32-S3 devices
+- *-update.bin  : Application partition for Over-The-Air (OTA) firmware updates
+- *.uf2         : Drag-and-drop firmware for Nordic nRF52840 mass storage bootloader
+- *.hex         : Intel HEX binary for J-Link / OpenOCD / hardware programmers
+- *.zip         : DFU update packages for nRF Connect / command-line tools
+EOF
+
+          # Create the all-in-one tools archive (alphabetically sorts to the bottom)
+          (cd bundle_staging && zip -9 -r "../dist/tools-all-models-core-firmware-${TAG}.zip" .)
+          
+          echo "Final release assets for upload:"
+          ls -lh dist/
+
+      - name: Generate Release Notes
+        run: |
+          TAG="${{ steps.pkg.outputs.tag }}"
+          IMG_BASE="https://raw.githubusercontent.com/RO-mesh/core-firmware/main/docs/assets/boards"
+          DOWNLOAD_BASE="https://github.com/RO-mesh/core-firmware/releases/download/${TAG}"
+
+          cat << EOF > release_notes.md
+          ## RO-mesh Core Firmware ${TAG}
+
+          Official pre-release for the Romanian decentralized mesh communications network (\`#ro\`). Built on a decoupled modular architecture based on MeshCore with Romanian channel plans, dynamic regulatory enforcement, and telemetry beacons.
+
+          ---
+
+          ### 📱 Companions (Mobile & Client Devices)
+
+          | Board | Model & Role | Primary Download | Flashing Method |
+          | :---: | :--- | :--- | :--- |
+          | <img src="${IMG_BASE}/t1000e.png" width="48" height="48" alt="T1000-E"> | **Seeed SenseCAP T1000-E**<br>Companion (Mobile / GPS / SOS) | [t1000e-companion-core-firmware-${TAG}.uf2](${DOWNLOAD_BASE}/t1000e-companion-core-firmware-${TAG}.uf2) ⭐ | **UF2** (Double-click button → Drag & Drop) |
+
+          ---
+
+          ### 📡 Repeaters (Infrastructure & Airborne Relays)
+
+          | Board | Model & Role | Primary Download | Flashing Method / Notes |
+          | :---: | :--- | :--- | :--- |
+          | <img src="${IMG_BASE}/heltec-v3.png" width="48" height="48" alt="Heltec V3"> | **Heltec LoRa32 V3**<br>Urban Infrastructure Repeater | [heltec-v3-repeater-core-firmware-${TAG}-factory.bin](${DOWNLOAD_BASE}/heltec-v3-repeater-core-firmware-${TAG}-factory.bin) ⭐ | **Factory** (\`0x0\` / WebSerial)<br>• [OTA Update.bin](${DOWNLOAD_BASE}/heltec-v3-repeater-core-firmware-${TAG}-update.bin) |
+          | <img src="${IMG_BASE}/tbeam-1w.png" width="48" height="48" alt="T-Beam 1W"> | **LilyGo T-Beam 1W**<br>High-Power Backbone Repeater | [tbeam-1w-repeater-core-firmware-${TAG}-factory.bin](${DOWNLOAD_BASE}/tbeam-1w-repeater-core-firmware-${TAG}-factory.bin) ⭐ | **Factory** (\`0x0\` / WebSerial)<br>• [OTA Update.bin](${DOWNLOAD_BASE}/tbeam-1w-repeater-core-firmware-${TAG}-update.bin) |
+          | <img src="${IMG_BASE}/rak-1w.png" width="48" height="48" alt="RAK 1W"> | **RAK4631 + 1W PA**<br>High-Power Backbone Repeater | [rak-1w-repeater-core-firmware-${TAG}.uf2](${DOWNLOAD_BASE}/rak-1w-repeater-core-firmware-${TAG}.uf2) ⭐ | **UF2** (Double-click reset → Drag & Drop) |
+          | <img src="${IMG_BASE}/t1000e.png" width="48" height="48" alt="T1000-E"> | **Seeed SenseCAP T1000-E**<br>Airborne Repeater (HAB / Drone) | [t1000e-repeater-core-firmware-${TAG}.uf2](${DOWNLOAD_BASE}/t1000e-repeater-core-firmware-${TAG}.uf2) ⭐ | **UF2** (Double-click button → Drag & Drop) |
+
+          ---
+
+          ### ℹ️ Flashing Guide & Binary Types
+
+          * **\`-factory.bin\` (ESP32 / ESP32-S3)**: Complete flash image including bootloader, partition table, and application. Flash at offset \`0x0000\` via \`esptool.py\` or browser WebSerial flashers.
+          * **\`-update.bin\` (ESP32 / ESP32-S3)**: Application-only partition. Used for Over-The-Air (OTA) updates on devices already running RO-mesh.
+          * **\`.uf2\` (Nordic nRF52840)**: Plug the device into your computer via USB, double-click the reset button to mount the virtual USB mass storage drive, and drag & drop the \`.uf2\` file.
+          * **\`tools-all-models-...zip\`**: Comprehensive developer bundle containing every compiled binary plus Intel \`.hex\` files and Nordic DFU \`.zip\` packages for J-Link and command-line programmers.
+          EOF
+          sed -i 's/^[ \t]*//' release_notes.md
+          cat release_notes.md
+
       - name: Create GitHub Pre-Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.pkg.outputs.tag }}
           name: "RO-mesh Core Firmware ${{ steps.pkg.outputs.tag }} (Pre-Release)"
+          body_path: release_notes.md
           prerelease: true
           draft: false
           files: dist/*
-          generate_release_notes: true
+          generate_release_notes: false

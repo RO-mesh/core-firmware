@@ -89,14 +89,24 @@ flowchart TD
 
 ## Hardware Target Matrix
 
-| Environment | Board / Target | MCU | Radio / FEM | Role |
-| :--- | :--- | :--- | :--- | :--- |
-| `t1000e_companion` | Seeed SenseCAP T1000-E | Nordic nRF52840 | Semtech LR1110 (LoRa + GNSS + Wi-Fi sniffer) | Mobile Companion / SOS / GPS |
-| `t1000e_repeater` | Seeed SenseCAP T1000-E | Nordic nRF52840 | Semtech LR1110 | Airborne Repeater (Balloon / Drone) |
-| `heltec_v3_repeater` | Heltec LoRa32 V3 | ESP32-S3 | Semtech SX1262 (Standard, up to +22 dBm) | Stationary Infrastructure Repeater |
-| `rak_1w_repeater` | RAK4631 + RAK13300 | Nordic nRF52840 | SX1262 + Skyworks PA (+14 dB gain, 1000mW) | High-Power Backbone Repeater |
-| `tbeam_1w_repeater` | LilyGo T-Beam 1W | ESP32-S3 | SX1262 + High-Power PA (+10 dB gain, 1000mW) | High-Power Backbone Repeater |
-| `native_test` | Host Workstation (Linux/macOS) | Native x86_64 | Mock Radio / Simulator | Automated CI & Verification |
+### 📱 Companions (Mobile & Client Devices)
+
+| Board | Target / Model | MCU | Radio / FEM | Role & Deployment |
+| :---: | :--- | :--- | :--- | :--- |
+| <img src="docs/assets/boards/t1000e.png" width="48" height="48" alt="T1000-E"> | **Seeed SenseCAP T1000-E**<br>`t1000e_companion` | Nordic nRF52840 | Semtech LR1110 | Mobile Client, GNSS Tracker, SOS, BLE Phone Bridge |
+
+---
+
+### 📡 Repeaters (Infrastructure & Airborne Relays)
+
+| Board | Target / Model | MCU | Radio / FEM | Role & Deployment |
+| :---: | :--- | :--- | :--- | :--- |
+| <img src="docs/assets/boards/heltec-v3.png" width="48" height="48" alt="Heltec V3"> | **Heltec LoRa32 V3**<br>`heltec_v3_repeater` | ESP32-S3 | Semtech SX1262 | Urban Infrastructure & Rooftop Relay |
+| <img src="docs/assets/boards/tbeam-1w.png" width="48" height="48" alt="T-Beam 1W"> | **LilyGo T-Beam 1W**<br>`tbeam_1w_repeater` | ESP32-S3 | SX1262 + High-Power PA (+10 dB) | High-Power Backbone Repeater (1000mW) |
+| <img src="docs/assets/boards/rak-1w.png" width="48" height="48" alt="RAK 1W"> | **RAK4631 + RAK13300**<br>`rak_1w_repeater` | Nordic nRF52840 | SX1262 + Skyworks PA (+14 dB) | High-Power Backbone Repeater (1000mW) |
+| <img src="docs/assets/boards/t1000e.png" width="48" height="48" alt="T1000-E"> | **Seeed SenseCAP T1000-E**<br>`t1000e_repeater` | Nordic nRF52840 | Semtech LR1110 | Airborne Relay (HAB Balloons / Drone Payloads) |
+| 💻 | **Host Workstation**<br>`native_test` | Native x86_64 | Mock Radio / Simulator | Automated CI Regression Verification |
+
 
 ---
 
