@@ -290,12 +290,11 @@ void run_test_sos_and_cli() {
     g_system_msg_count = 0;
     bool handled_help = CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/help");
     assert(handled_help == true);
-    assert(g_system_msg_count > 1); // Confirmed split into multiple [1/X] chunks
-    assert(strstr(g_accumulated_system_msg, "[1/") != nullptr);
+    assert(g_system_msg_count == 2); // Confirmed split into exactly 2 compact [1/2] and [2/2] chunks
+    assert(strstr(g_accumulated_system_msg, "[1/2]") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "[2/2]") != nullptr);
     assert(strstr(g_accumulated_system_msg, "/status") != nullptr);
-    assert(strstr(g_accumulated_system_msg, "get radio") != nullptr);
-    assert(strstr(g_accumulated_system_msg, "set radio") != nullptr);
-    assert(strstr(g_accumulated_system_msg, "set name") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "radio") != nullptr);
     assert(strstr(g_accumulated_system_msg, "reboot") != nullptr);
 
     // 4. Native Companion CLI Delegation (get & set commands)
@@ -391,12 +390,48 @@ void run_test_sos_and_cli() {
     SosT1000e::instance().update(t);
 
     assert(SosT1000e::instance().isActive() == true);
-    assert(strstr(g_last_sos_msg, "[EMERGENCY-SOS]") != nullptr);
+    assert(strstr(g_last_sos_msg, "SOS:") != nullptr);
     assert(strstr(g_last_sos_msg, "https://maps.google.com") != nullptr);
 
     // Cancel active SOS -> resolution packet
     SosT1000e::instance().cancelSos("Cleared");
-    assert(strstr(g_last_sos_msg, "[SOS-RESOLVED]") != nullptr);
+    assert(strstr(g_last_sos_msg, "SOS-RESOLVED") != nullptr);
+
+    // 5. Configurable SOS CLI Commands Verification
+    // Test /sos interval
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/sos interval 45");
+    assert(SosT1000e::instance().getConfig().interval_seconds == 45);
+    assert(strstr(g_last_system_msg, "45 s") != nullptr);
+
+    // Test /sos countdown
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/sos countdown 10");
+    assert(SosT1000e::instance().getConfig().countdown_seconds == 10);
+    assert(strstr(g_last_system_msg, "10 s") != nullptr);
+
+    // Test /sos channel
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/sos channel #sos");
+    assert(strcmp(SosT1000e::instance().getConfig().channel, "#sos") == 0);
+    assert(strstr(g_last_system_msg, "#sos") != nullptr);
+
+    // Test /sos msg
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/sos msg AJUTOR URGENT");
+    assert(strstr(SosT1000e::instance().getConfig().custom_message, "AJUTOR URGENT") != nullptr);
+    assert(strstr(g_last_system_msg, "OK > SOS message updated") != nullptr);
+
+    // Test /sos status
+    g_accumulated_system_msg[0] = '\0';
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/sos");
+    assert(strstr(g_accumulated_system_msg, "SOS Status") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "AJUTOR URGENT") != nullptr);
+
+    // Test set sos interval (companion CLI format)
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "set sos interval 90");
+    assert(SosT1000e::instance().getConfig().interval_seconds == 90);
+
+    // Test get sos (companion CLI format)
+    g_accumulated_system_msg[0] = '\0';
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "get sos");
+    assert(strstr(g_accumulated_system_msg, "SOS Status") != nullptr);
 
     printf("  -> T1000-E SOS & Channel CLI tests passed!\n");
 }

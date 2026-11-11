@@ -89,17 +89,17 @@ public:
         mesh::Utils::sha256((uint8_t*)&expected_ack, 4, temp, 5 + tlen, ro_mesh::SYSTEM_VIRTUAL_PUBKEY, PUB_KEY_SIZE);
         if (expected_ack == 0) expected_ack = 0xA1B2C3D4;
 
-        // 1. Send RESP_CODE_SENT (0x06) with expected_ack
+        // 1. Send RESP_CODE_SENT (0x06) with expected_ack and standard timeout (5000ms)
         uint8_t out_frame[10];
         out_frame[0] = 6; // RESP_CODE_SENT
         out_frame[1] = 0; // direct
-        uint32_t est_timeout = 100;
+        uint32_t est_timeout = 5000;
         memcpy(&out_frame[2], &expected_ack, 4);
         memcpy(&out_frame[6], &est_timeout, 4);
         _underlying->writeFrame(out_frame, 10);
 
         // 2. Immediately send PUSH_CODE_SEND_CONFIRMED (0x82) to confirm delivery to app
-        // This stops the official MeshCore app from retrying 8 times!
+        // This stops the official MeshCore app from retrying!
         uint8_t ack_frame[9];
         ack_frame[0] = 0x82; // PUSH_CODE_SEND_CONFIRMED
         memcpy(&ack_frame[1], &expected_ack, 4);
@@ -107,8 +107,16 @@ public:
         memcpy(&ack_frame[5], &trip_time, 4);
         _underlying->writeFrame(ack_frame, 9);
 
-        // Execute via CliAssistant
-        ro_mesh::CliAssistant::instance().handleMessage(ro_mesh::SYSTEM_VIRTUAL_PUBKEY, false, text_buf);
+        // Deduplication: if retry attempt > 0 or duplicate timestamp, do not re-execute!
+        uint32_t msg_timestamp = 0;
+        memcpy(&msg_timestamp, &dest[3], 4);
+        uint8_t attempt = dest[2] & 3;
+
+        static uint32_t s_last_handled_msg_ts = 0;
+        if (attempt == 0 && (msg_timestamp == 0 || msg_timestamp != s_last_handled_msg_ts)) {
+          s_last_handled_msg_ts = msg_timestamp;
+          ro_mesh::CliAssistant::instance().handleMessage(ro_mesh::SYSTEM_VIRTUAL_PUBKEY, false, text_buf);
+        }
 
         return 0; // Consumed
       }
@@ -182,6 +190,13 @@ public:
     uint32_t now_ts = rtc_clock.getCurrentTimeUnique();
     static_cast<RoMeshCompanionHelper&>(the_mesh).queueMessage(from, TXT_TYPE_PLAIN, &dummy_pkt, now_ts, NULL, 0, text);
   }
+
+  static void injectChannelMessage(const mesh::GroupChannel& channel, const char* text) {
+    mesh::Packet dummy_pkt;
+    memset(&dummy_pkt, 0, sizeof(dummy_pkt));
+    uint32_t now_ts = rtc_clock.getCurrentTimeUnique();
+    static_cast<RoMeshCompanionHelper&>(the_mesh).onChannelMessageRecv(channel, &dummy_pkt, now_ts, text);
+  }
 };
 
 static uint32_t s_buzzer_off_ms = 0;
@@ -249,11 +264,22 @@ void setup() {
   }
 
 #ifdef MAX_GROUP_CHANNELS
+  bool has_romania = false;
+  bool has_sos = false;
+  bool has_alerte = false;
   ChannelDetails ch;
-  if (!the_mesh.getChannel(0, ch)) {
-    the_mesh.addChannel("#romania", "iLDLz3P0uM9sQKWjoO7DjQ==");
-    the_mesh.addChannel("#sos", "lehpzs+tiL86CmVmy99vpg==");
-    the_mesh.addChannel("#alerte", "2bIin6HPy1yM5u5lZ1VJDQ==");
+  for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+    if (the_mesh.getChannel(i, ch) && strlen(ch.name) > 0) {
+      if (strcasecmp(ch.name, "#romania") == 0) has_romania = true;
+      if (strcasecmp(ch.name, "#sos") == 0) has_sos = true;
+      if (strcasecmp(ch.name, "#alerte") == 0) has_alerte = true;
+    }
+  }
+  bool dirty_channels = false;
+  if (!has_romania) { the_mesh.addChannel("#romania", "iLDLz3P0uM9sQKWjoO7DjQ=="); dirty_channels = true; }
+  if (!has_sos)     { the_mesh.addChannel("#sos",     "lehpzs+tiL86CmVmy99vpg=="); dirty_channels = true; }
+  if (!has_alerte)  { the_mesh.addChannel("#alerte",  "2bIin6HPy1yM5u5lZ1VJDQ=="); dirty_channels = true; }
+  if (dirty_channels) {
     store.saveChannels(&the_mesh);
   }
 #endif
@@ -434,7 +460,32 @@ void setup() {
 
   ro_mesh::SosT1000e::instance().init();
   ro_mesh::SosT1000e::instance().setSendCallback([](const char* channel, const char* target_contact, const char* message) {
-    Serial.printf("[SOS BROADCAST] %s: %s\n", channel ? channel : "Direct", message);
+    uint32_t now_ts = rtc_clock.getCurrentTimeUnique();
+    Serial.printf("[SOS TX] Target: %s | Msg: %s\n", channel ? channel : (target_contact ? target_contact : "None"), message);
+
+    if (channel && strlen(channel) > 0) {
+      ChannelDetails ch;
+      for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+        if (the_mesh.getChannel(i, ch) && strcasecmp(ch.name, channel) == 0) {
+          // 1. Transmit over LoRa RF broadcast to mesh
+          the_mesh.sendGroupMessage(now_ts, ch.channel, the_mesh.getNodePrefs()->node_name, message, strlen(message));
+
+          // 2. Local loopback injection so companion app displays it in channel chat
+          RoMeshCompanionHelper::injectChannelMessage(ch.channel, message);
+          break;
+        }
+      }
+    } else if (target_contact && strlen(target_contact) > 0) {
+      ContactInfo contact;
+      for (uint32_t i = 0; the_mesh.getContactByIdx(i, contact); i++) {
+        if (strcasecmp(contact.name, target_contact) == 0) {
+          uint32_t exp_ack = 0;
+          uint32_t est_to = 5000;
+          the_mesh.sendMessage(contact, now_ts, 0, message, exp_ack, est_to);
+          break;
+        }
+      }
+    }
   });
 
   ro_mesh::SosT1000e::instance().setBeepCallback([](uint32_t freq_hz, uint32_t duration_ms) {
@@ -477,6 +528,23 @@ void loop() {
 #endif
   ro_mesh::SosT1000e::instance().update(now_ms);
   ro_mesh::TelemetryBeacon::instance().update(now_ms);
+
+  // Periodic 2-second telemetry update to SOS and CLI
+  static uint32_t s_last_telemetry_feed_ms = 0;
+  if (now_ms - s_last_telemetry_feed_ms >= 2000) {
+    s_last_telemetry_feed_ms = now_ms;
+    bool has_gps = (sensors.node_lat != 0.0 || sensors.node_lon != 0.0);
+    uint16_t mv = board.getBattMilliVolts();
+    float batt_volts = (float)mv / 1000.0f;
+    uint8_t batt_pct = (mv > 3300) ? ((mv - 3300) * 100 / (4200 - 3300)) : 0;
+    if (batt_pct > 100) batt_pct = 100;
+
+    ro_mesh::SosT1000e::instance().updateGps(sensors.node_lat, sensors.node_lon, sensors.node_altitude, has_gps);
+    ro_mesh::SosT1000e::instance().updateBattery(batt_pct);
+
+    ro_mesh::CliAssistant::instance().setBattery(batt_pct, batt_volts);
+    ro_mesh::CliAssistant::instance().setGps(sensors.node_lat, sensors.node_lon, sensors.node_altitude, has_gps, 0);
+  }
 
   // Non-blocking buzzer auto-shutoff
   if (s_buzzer_off_ms > 0 && now_ms >= s_buzzer_off_ms) {

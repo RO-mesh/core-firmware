@@ -108,9 +108,13 @@ void CliAssistant::sendReply(const uint8_t* dest, bool is_ch, const char* reply)
         size_t rem = strlen(p);
         size_t take = (rem > CHUNK_SIZE) ? CHUNK_SIZE : rem;
         if (take < rem) {
-            // Find natural breakpoint (newline or space)
+            // Find natural breakpoint (newline preferred, then space)
             size_t b = take;
-            while (b > 20 && p[b] != '\n' && p[b] != ' ') b--;
+            while (b > 20 && p[b] != '\n') b--;
+            if (b <= 20) {
+                b = take;
+                while (b > 20 && p[b] != ' ') b--;
+            }
             if (b > 20) take = b;
         }
         memcpy(chunks[count], p, take);
@@ -145,6 +149,10 @@ void CliAssistant::executeCommand(const char* cmd_line, const uint8_t* destinati
         cmdTier(p + 4, target, is_channel);
     } else if (strncasecmp(p, "sos", 3) == 0 && (p[3] == '\0' || p[3] == ' ')) {
         cmdSos(p + 3, target, is_channel);
+    } else if (strncasecmp(p, "set sos", 7) == 0 && (p[7] == '\0' || p[7] == ' ')) {
+        cmdSos(p + 7, target, is_channel);
+    } else if (strcasecmp(p, "get sos") == 0) {
+        cmdSos("", target, is_channel);
     } else if (strncasecmp(p, "telemetry", 9) == 0 && (p[9] == '\0' || p[9] == ' ')) {
         cmdTelemetry(p + 9, target, is_channel);
     } else if (strcasecmp(p, "battery") == 0) {
@@ -180,28 +188,14 @@ void CliAssistant::executeCommand(const char* cmd_line, const uint8_t* destinati
 
 void CliAssistant::cmdHelp(const uint8_t* dest, bool is_ch) {
     const char* help_text = 
-        "🔧 Comenzi RO-mesh:\n"
-        "• /status - Stare nod, baterie, GPS, Tier, PA\n"
-        "• /tier [0-3|auto|off] - Configurare profil timing\n"
-        "• /sos [trigger|cancel|status] - Baliză urgență\n"
-        "• /telemetry [on|off|status] - Telemetrie GPS\n"
-        "• /battery - Nivel baterie și tensiune\n"
-        "• /gps - Coordonate curente și sateliți\n"
-        "• /pa - Limită putere și amplificare PA\n"
-        "• /info - Versiune firmware și domeniu (#ro)\n"
-        "📡 Comenzi Radio & Rețea (get/set):\n"
-        "• get radio / set radio <freq> <bw> <sf> <cr>\n"
-        "• get freq / get af / set af <factor>\n"
-        "• get dutycycle / set dutycycle <procent>\n"
-        "• get tx / set tx <putere_dBm>\n"
-        "⚙️ Comenzi Nod & Sistem (get/set):\n"
-        "• get name / set name <nume_nod>\n"
-        "• get pin / set pin <cod_pin>\n"
-        "• get tz.offset / set tz.offset <ore>\n"
-        "• board - Model hardware\n"
-        "• ver - Versiune nucleu MeshCore\n"
-        "• reboot - Repornire dispozitiv\n"
-        "• poweroff / shutdown - Oprire dispozitiv";
+        "🔧 RO-mesh:\n"
+        "• /status, /battery, /gps, /info\n"
+        "• /sos [trigger|cancel|cfg]\n"
+        "• /tier [auto|0-3] | /telemetry\n"
+        "⚙️ Setari:\n"
+        "• radio <f,bw,sf,cr>, tx, af\n"
+        "• dutycycle, name, pin, tz.offset\n"
+        "• board, ver, reboot, poweroff";
     sendReply(dest, is_ch, help_text);
 }
 
@@ -246,15 +240,83 @@ void CliAssistant::cmdTier(const char* args, const uint8_t* dest, bool is_ch) {
 
 void CliAssistant::cmdSos(const char* args, const uint8_t* dest, bool is_ch) {
     while (*args == ' ') args++;
-    char reply[160];
+    char reply[256];
 
-    if (strcasecmp(args, "trigger") == 0) {
+    if (strcasecmp(args, "trigger") == 0 || strcasecmp(args, "on") == 0 || strcasecmp(args, "start") == 0) {
         SosT1000e::instance().triggerManualSos("CLI /sos trigger");
         snprintf(reply, sizeof(reply), "🚨 Emergency SOS ARMED! Countdown active (%u s). Hold 5s or /sos cancel to abort.",
                  SosT1000e::instance().getConfig().countdown_seconds);
-    } else if (strcasecmp(args, "cancel") == 0) {
+    } else if (strcasecmp(args, "cancel") == 0 || strcasecmp(args, "off") == 0 || strcasecmp(args, "stop") == 0) {
         SosT1000e::instance().cancelSos("CLI /sos cancel");
         snprintf(reply, sizeof(reply), "✅ SOS has been cancelled. Resolution transmitted.");
+    } else if (strncasecmp(args, "interval", 8) == 0 || strncasecmp(args, "set interval", 12) == 0) {
+        const char* val = strchr(args, ' ');
+        if (strncasecmp(args, "set interval", 12) == 0 && val) val = strchr(val + 1, ' ');
+        if (val) {
+            uint32_t sec = atoi(val);
+            if (sec >= 10 && sec <= 3600) {
+                SosT1000e::instance().setInterval(sec);
+                snprintf(reply, sizeof(reply), "OK > SOS interval: %u s", sec);
+            } else {
+                snprintf(reply, sizeof(reply), "Error, interval must be 10..3600 s");
+            }
+        } else {
+            snprintf(reply, sizeof(reply), "Usage: /sos interval <seconds>");
+        }
+    } else if (strncasecmp(args, "countdown", 9) == 0 || strncasecmp(args, "set countdown", 13) == 0) {
+        const char* val = strchr(args, ' ');
+        if (strncasecmp(args, "set countdown", 13) == 0 && val) val = strchr(val + 1, ' ');
+        if (val) {
+            uint32_t sec = atoi(val);
+            if (sec <= 120) {
+                SosT1000e::instance().setCountdown(sec);
+                snprintf(reply, sizeof(reply), "OK > SOS countdown: %u s", sec);
+            } else {
+                snprintf(reply, sizeof(reply), "Error, countdown must be 0..120 s");
+            }
+        } else {
+            snprintf(reply, sizeof(reply), "Usage: /sos countdown <seconds>");
+        }
+    } else if (strncasecmp(args, "channel", 7) == 0 || strncasecmp(args, "set channel", 11) == 0) {
+        const char* val = strchr(args, ' ');
+        if (strncasecmp(args, "set channel", 11) == 0 && val) val = strchr(val + 1, ' ');
+        if (val) {
+            while (*val == ' ') val++;
+            SosT1000e::instance().setChannel(val);
+            snprintf(reply, sizeof(reply), "OK > SOS channel: %s", val);
+        } else {
+            snprintf(reply, sizeof(reply), "Usage: /sos channel <#name>");
+        }
+    } else if (strncasecmp(args, "msg", 3) == 0 || strncasecmp(args, "set msg", 7) == 0) {
+        const char* val = strchr(args, ' ');
+        if (strncasecmp(args, "set msg", 7) == 0 && val) val = strchr(val + 1, ' ');
+        if (val) {
+            while (*val == ' ') val++;
+            SosT1000e::instance().setMessage(val);
+            snprintf(reply, sizeof(reply), "OK > SOS message updated");
+        } else {
+            snprintf(reply, sizeof(reply), "Usage: /sos msg <text>");
+        }
+    } else if (strncasecmp(args, "callsign", 8) == 0 || strncasecmp(args, "set callsign", 12) == 0) {
+        const char* val = strchr(args, ' ');
+        if (strncasecmp(args, "set callsign", 12) == 0 && val) val = strchr(val + 1, ' ');
+        if (val) {
+            while (*val == ' ') val++;
+            SosT1000e::instance().setCallsign(val);
+            snprintf(reply, sizeof(reply), "OK > SOS callsign: %s", val);
+        } else {
+            snprintf(reply, sizeof(reply), "Usage: /sos callsign <callsign>");
+        }
+    } else if (strncasecmp(args, "contacts", 8) == 0 || strncasecmp(args, "set contacts", 12) == 0) {
+        const char* val = strchr(args, ' ');
+        if (strncasecmp(args, "set contacts", 12) == 0 && val) val = strchr(val + 1, ' ');
+        if (val) {
+            while (*val == ' ') val++;
+            SosT1000e::instance().setContacts(val);
+            snprintf(reply, sizeof(reply), "OK > SOS contacts updated");
+        } else {
+            snprintf(reply, sizeof(reply), "Usage: /sos contacts <list>");
+        }
     } else {
         const char* st = "IDLE";
         if (SosT1000e::instance().isArmed()) st = "ARMED_COUNTDOWN";
@@ -262,10 +324,16 @@ void CliAssistant::cmdSos(const char* args, const uint8_t* dest, bool is_ch) {
         else if (SosT1000e::instance().getState() == SosState::RESOLVED) st = "RESOLVED";
 
         snprintf(reply, sizeof(reply),
-                 "🚨 SOS Status: %s\nChannel: %s | Interval: %us | Beacons Sent: %u",
+                 "🚨 SOS Status: %s\n"
+                 "• Channel: %s | Intv: %us\n"
+                 "• Countdown: %us | Beacons: %u\n"
+                 "• Msg: %s\n"
+                 "Cfg: /sos [interval|countdown|channel|msg|trigger|cancel]",
                  st, SosT1000e::instance().getConfig().channel,
                  SosT1000e::instance().getConfig().interval_seconds,
-                 SosT1000e::instance().getActiveBeaconsSent());
+                 SosT1000e::instance().getConfig().countdown_seconds,
+                 SosT1000e::instance().getActiveBeaconsSent(),
+                 SosT1000e::instance().getConfig().custom_message);
     }
     sendReply(dest, is_ch, reply);
 }

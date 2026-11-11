@@ -47,6 +47,8 @@ public:
     void setMessage(const char* msg);
     void setChannel(const char* ch);
     void setInterval(uint32_t sec);
+    void setCountdown(uint32_t sec);
+    void setContacts(const char* contacts);
 
     // External GPS and Telemetry injection
     void updateGps(double lat, double lon, float altitude, bool has_fix);

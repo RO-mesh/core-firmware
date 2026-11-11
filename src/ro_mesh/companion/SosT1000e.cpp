@@ -70,6 +70,19 @@ void SosT1000e::setInterval(uint32_t sec) {
     }
 }
 
+void SosT1000e::setCountdown(uint32_t sec) {
+    if (sec <= 120) {
+        _config.countdown_seconds = sec;
+    }
+}
+
+void SosT1000e::setContacts(const char* contacts) {
+    if (contacts) {
+        strncpy(_config.contacts, contacts, sizeof(_config.contacts) - 1);
+        _config.contacts[sizeof(_config.contacts) - 1] = '\0';
+    }
+}
+
 void SosT1000e::updateGps(double lat, double lon, float altitude, bool has_fix) {
     _lat = lat;
     _lon = lon;
@@ -197,13 +210,12 @@ void SosT1000e::transmitSosBeacon(uint32_t now_ms) {
     char buffer[256];
     if (_has_gps_fix) {
         snprintf(buffer, sizeof(buffer),
-                 "[EMERGENCY-SOS] %s: %s | Loc: %.5f,%.5f (alt: %.0fm) | Batt: %u%% | Map: https://maps.google.com/?q=%.5f,%.5f",
-                 _config.callsign, _config.custom_message, _lat, _lon, (double)_altitude,
-                 _battery_pct, _lat, _lon);
+                 "🚨 SOS: %s | Loc: %.5f,%.5f | Batt: %u%% | https://maps.google.com/?q=%.5f,%.5f",
+                 _config.custom_message, _lat, _lon, _battery_pct, _lat, _lon);
     } else {
         snprintf(buffer, sizeof(buffer),
-                 "[EMERGENCY-SOS] %s: %s | Loc: NO-GPS-FIX | Batt: %u%%",
-                 _config.callsign, _config.custom_message, _battery_pct);
+                 "🚨 SOS: %s | Loc: NO-GPS-FIX | Batt: %u%%",
+                 _config.custom_message, _battery_pct);
     }
 
     // 1. Broadcast to emergency channel (e.g. #sos)
@@ -238,12 +250,11 @@ void SosT1000e::transmitResolution() {
     char buffer[256];
     if (_has_gps_fix) {
         snprintf(buffer, sizeof(buffer),
-                 "[SOS-RESOLVED] %s: Emergency cleared | https://maps.google.com/?q=%.5f,%.5f",
-                 _config.callsign, _lat, _lon);
+                 "✅ SOS-RESOLVED: Emergency cleared | Loc: %.5f,%.5f",
+                 _lat, _lon);
     } else {
         snprintf(buffer, sizeof(buffer),
-                 "[SOS-RESOLVED] %s: Emergency cleared",
-                 _config.callsign);
+                 "✅ SOS-RESOLVED: Emergency cleared");
     }
 
     if (_send_cb) {
