@@ -246,9 +246,19 @@ void CliAssistant::cmdSos(const char* args, const uint8_t* dest, bool is_ch) {
         SosT1000e::instance().triggerManualSos("CLI /sos trigger");
         snprintf(reply, sizeof(reply), "🚨 Emergency SOS ARMED! Countdown active (%u s). Hold 5s or /sos cancel to abort.",
                  SosT1000e::instance().getConfig().countdown_seconds);
+    } else if (strcasecmp(args, "cancel force") == 0 || strcasecmp(args, "off force") == 0 || strcasecmp(args, "stop force") == 0) {
+        SosT1000e::instance().cancelSos("CLI /sos cancel force", true);
+        snprintf(reply, sizeof(reply), "✅ SOS cancelled immediately. Resolution transmitted.");
     } else if (strcasecmp(args, "cancel") == 0 || strcasecmp(args, "off") == 0 || strcasecmp(args, "stop") == 0) {
-        SosT1000e::instance().cancelSos("CLI /sos cancel");
-        snprintf(reply, sizeof(reply), "✅ SOS has been cancelled. Resolution transmitted.");
+        if (SosT1000e::instance().isActive()) {
+            SosT1000e::instance().cancelSos("CLI /sos cancel", false);
+            snprintf(reply, sizeof(reply),
+                     "🚨 Initiating SOS deactivation countdown (%u s). Type /sos cancel force to bypass or press button to abort deactivation.",
+                     SosT1000e::instance().getConfig().countdown_seconds);
+        } else {
+            SosT1000e::instance().cancelSos("CLI /sos cancel", true);
+            snprintf(reply, sizeof(reply), "✅ SOS has been cancelled.");
+        }
     } else if (strncasecmp(args, "interval", 8) == 0 || strncasecmp(args, "set interval", 12) == 0) {
         const char* val = strchr(args, ' ');
         if (strncasecmp(args, "set interval", 12) == 0 && val) val = strchr(val + 1, ' ');
@@ -320,6 +330,7 @@ void CliAssistant::cmdSos(const char* args, const uint8_t* dest, bool is_ch) {
     } else {
         const char* st = "IDLE";
         if (SosT1000e::instance().isArmed()) st = "ARMED_COUNTDOWN";
+        else if (SosT1000e::instance().isDisarming()) st = "DISARM_COUNTDOWN";
         else if (SosT1000e::instance().isActive()) st = "ACTIVE_BEACONING";
         else if (SosT1000e::instance().getState() == SosState::RESOLVED) st = "RESOLVED";
 
@@ -328,7 +339,7 @@ void CliAssistant::cmdSos(const char* args, const uint8_t* dest, bool is_ch) {
                  "• Channel: %s | Intv: %us\n"
                  "• Countdown: %us | Beacons: %u\n"
                  "• Msg: %s\n"
-                 "Cfg: /sos [interval|countdown|channel|msg|trigger|cancel]",
+                 "Cfg: /sos [interval|countdown|channel|msg|trigger|cancel|cancel force]",
                  st, SosT1000e::instance().getConfig().channel,
                  SosT1000e::instance().getConfig().interval_seconds,
                  SosT1000e::instance().getConfig().countdown_seconds,

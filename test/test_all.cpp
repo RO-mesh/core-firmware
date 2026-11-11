@@ -31,6 +31,13 @@ static char g_last_sos_channel[64] = {0};
 static char g_last_telemetry_msg[512] = {0};
 static char g_accumulated_system_msg[2048] = {0};
 static int g_system_msg_count = 0;
+static SosSoundEffect g_last_sfx = SosSoundEffect::NONE;
+static int g_sfx_count = 0;
+
+static void testSfxCallback(SosSoundEffect sfx) {
+    g_last_sfx = sfx;
+    g_sfx_count++;
+}
 
 static void testInjectSystemMessage(const uint8_t* /*target_id*/, bool /*is_channel*/, const char* message) {
     strncpy(g_last_system_msg, message, sizeof(g_last_system_msg) - 1);
@@ -274,6 +281,7 @@ void run_test_sos_and_cli() {
 
     SosT1000e::instance().init();
     SosT1000e::instance().setSendCallback(testSendSosPacket);
+    SosT1000e::instance().setSoundEffectCallback(testSfxCallback);
 
     // 1. Virtual System Contact Verification
     assert(isSystemContact(SYSTEM_VIRTUAL_PUBKEY) == true);
@@ -384,18 +392,46 @@ void run_test_sos_and_cli() {
 
     SosT1000e::instance().updateGps(45.6579, 25.6012, 650.0f, true); // Brasov coordinates
     SosT1000e::instance().updateBattery(90);
+    SosT1000e::instance().updateTime(1700000000, 2); // Synced epoch + 2h tz
 
     // Advance time past 15 seconds countdown
     t += 16000;
     SosT1000e::instance().update(t);
 
     assert(SosT1000e::instance().isActive() == true);
-    assert(strstr(g_last_sos_msg, "SOS:") != nullptr);
+    assert(strstr(g_last_sos_msg, "[SOS]") != nullptr);
+    assert(strstr(g_last_sos_msg, "Alt: 650m") != nullptr);
+    assert(strstr(g_last_sos_msg, "Ora:") != nullptr);
     assert(strstr(g_last_sos_msg, "https://maps.google.com") != nullptr);
+    assert(g_last_sfx == SosSoundEffect::RADAR_PING);
 
-    // Cancel active SOS -> resolution packet
-    SosT1000e::instance().cancelSos("Cleared");
-    assert(strstr(g_last_sos_msg, "SOS-RESOLVED") != nullptr);
+    // Test Safe Disarm Guard: initiate deactivation countdown
+    SosT1000e::instance().cancelSos("Cleared", false);
+    assert(SosT1000e::instance().isDisarming() == true);
+    assert(SosT1000e::instance().getState() == SosState::DISARM_COUNTDOWN);
+
+    // Abort deactivation by pressing hardware button during disarm countdown
+    t += 1000;
+    SosT1000e::instance().onButtonEvent(true, t);
+    assert(SosT1000e::instance().isActive() == true);
+    assert(SosT1000e::instance().isDisarming() == false);
+    assert(g_last_sfx == SosSoundEffect::DISARM_ABORTED);
+    t += 100;
+    SosT1000e::instance().onButtonEvent(false, t);
+
+    // Initiate deactivation countdown again and let it expire
+    t += 500;
+    SosT1000e::instance().cancelSos("Cleared", false);
+    assert(SosT1000e::instance().isDisarming() == true);
+    SosT1000e::instance().update(t);
+
+    t += 16000; // Complete 15s countdown
+    SosT1000e::instance().update(t);
+
+    assert(SosT1000e::instance().getState() == SosState::RESOLVED);
+    assert(strstr(g_last_sos_msg, "[SOS-RESOLVED]") != nullptr);
+    assert(strstr(g_last_sos_msg, "Alt: 650m") != nullptr);
+    assert(g_last_sfx == SosSoundEffect::COMPLETED_FANFARE);
 
     // 5. Configurable SOS CLI Commands Verification
     // Test /sos interval
@@ -423,6 +459,24 @@ void run_test_sos_and_cli() {
     CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/sos");
     assert(strstr(g_accumulated_system_msg, "SOS Status") != nullptr);
     assert(strstr(g_accumulated_system_msg, "AJUTOR URGENT") != nullptr);
+
+    // Test /sos cancel and /sos cancel force CLI commands
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/sos trigger");
+    assert(SosT1000e::instance().isArmed() == true);
+    SosT1000e::instance().update(t);
+    t += 16000;
+    SosT1000e::instance().update(t);
+    assert(SosT1000e::instance().isActive() == true);
+
+    // Regular /sos cancel initiates countdown
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/sos cancel");
+    assert(SosT1000e::instance().isDisarming() == true);
+    assert(strstr(g_last_system_msg, "countdown") != nullptr);
+
+    // /sos cancel force overrides immediately
+    CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/sos cancel force");
+    assert(SosT1000e::instance().getState() == SosState::RESOLVED);
+    assert(strstr(g_last_system_msg, "immediately") != nullptr);
 
     // Test set sos interval (companion CLI format)
     CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "set sos interval 90");

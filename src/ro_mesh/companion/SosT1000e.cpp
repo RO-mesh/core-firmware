@@ -18,6 +18,8 @@ SosT1000e::SosT1000e()
       _click_count(0),
       _countdown_start_ms(0),
       _last_beep_sec(0),
+      _disarm_start_ms(0),
+      _last_disarm_beep_sec(0),
       _last_beacon_ms(0),
       _beacons_sent(0),
       _lat(0.0),
@@ -25,8 +27,10 @@ SosT1000e::SosT1000e()
       _altitude(0.0f),
       _has_gps_fix(false),
       _battery_pct(100),
+      _current_time_sec(0),
       _send_cb(nullptr),
-      _beep_cb(nullptr) {
+      _beep_cb(nullptr),
+      _sfx_cb(nullptr) {
     
     memset(&_config, 0, sizeof(_config));
     strncpy(_config.callsign, "RO-NODE", sizeof(_config.callsign) - 1);
@@ -41,6 +45,10 @@ void SosT1000e::init() {
     _click_count = 0;
     _button_last_state = false;
     _beacons_sent = 0;
+    _countdown_start_ms = 0;
+    _disarm_start_ms = 0;
+    _last_beep_sec = 0;
+    _last_disarm_beep_sec = 0;
 }
 
 void SosT1000e::setCallsign(const char* callsign) {
@@ -94,22 +102,45 @@ void SosT1000e::updateBattery(uint8_t batt_pct) {
     _battery_pct = batt_pct > 100 ? 100 : batt_pct;
 }
 
+void SosT1000e::updateTime(uint32_t epoch_sec, int8_t tz_offset) {
+    if (epoch_sec > 0) {
+        _current_time_sec = epoch_sec + ((int32_t)tz_offset * 3600);
+    }
+}
+
 void SosT1000e::onButtonEvent(bool is_pressed, uint32_t now_ms) {
     if (is_pressed && !_button_last_state) {
         // Button press transition
         _press_start_ms = now_ms;
+
+        // If currently in DISARM countdown, pressing any button immediately aborts deactivation!
+        if (_state == SosState::DISARM_COUNTDOWN) {
+            _state = SosState::ACTIVE_BEACONING;
+            _disarm_start_ms = 0;
+            _last_disarm_beep_sec = 0;
+            if (_sfx_cb) {
+                _sfx_cb(SosSoundEffect::DISARM_ABORTED);
+            } else if (_beep_cb) {
+                _beep_cb(3200, 150);
+            }
+            _click_count = 0;
+            _button_last_state = is_pressed;
+            return;
+        }
     } else if (!is_pressed && _button_last_state) {
         // Button release transition
         uint32_t duration = now_ms - _press_start_ms;
 
-        // Long press check (>= 5000ms) cancels / disarms SOS
+        // Long press check (>= 5000ms) initiates cancellation/disarm
         if (duration >= 5000) {
-            if (_state == SosState::ARMED_COUNTDOWN || _state == SosState::ACTIVE_BEACONING) {
-                cancelSos("5-second hardware hold gesture");
+            if (_state == SosState::ARMED_COUNTDOWN) {
+                cancelSos("5-second hardware hold gesture", true);
+            } else if (_state == SosState::ACTIVE_BEACONING) {
+                cancelSos("5-second hardware hold gesture", false);
             }
             _click_count = 0;
-        } else if (duration >= 50 && duration < 800) {
-            // Valid short click
+        } else if (duration >= 80 && duration < 800) {
+            // Debounced valid short click
             if (now_ms - _last_click_ms < 600) {
                 _click_count++;
             } else {
@@ -121,8 +152,10 @@ void SosT1000e::onButtonEvent(bool is_pressed, uint32_t now_ms) {
             if (_click_count == 2) {
                 if (_state == SosState::IDLE || _state == SosState::RESOLVED) {
                     triggerManualSos("Double-click gesture");
-                } else if (_state == SosState::ARMED_COUNTDOWN || _state == SosState::ACTIVE_BEACONING) {
-                    cancelSos("Double-click cancel gesture");
+                } else if (_state == SosState::ARMED_COUNTDOWN) {
+                    cancelSos("Double-click cancel gesture", true);
+                } else if (_state == SosState::ACTIVE_BEACONING) {
+                    cancelSos("Double-click cancel gesture", false);
                 }
                 _click_count = 0;
             }
@@ -143,25 +176,56 @@ void SosT1000e::triggerManualSos(const char* /*reason*/) {
     }
 }
 
-void SosT1000e::cancelSos(const char* reason) {
-    bool was_active = (_state == SosState::ACTIVE_BEACONING);
-    _state = SosState::RESOLVED;
-
-    if (_beep_cb) {
-        _beep_cb(1000, 500); // Disarm sound
+void SosT1000e::cancelSos(const char* /*reason*/, bool force_instant) {
+    if (_state == SosState::IDLE || _state == SosState::RESOLVED) {
+        return;
     }
 
-    if (was_active) {
-        transmitResolution();
+    if (force_instant || _state == SosState::ARMED_COUNTDOWN) {
+        bool was_active = (_state == SosState::ACTIVE_BEACONING || _state == SosState::DISARM_COUNTDOWN);
+        _state = SosState::RESOLVED;
+        _disarm_start_ms = 0;
+        _last_disarm_beep_sec = 0;
+
+        if (_sfx_cb) {
+            _sfx_cb(SosSoundEffect::COMPLETED_FANFARE);
+        } else if (_beep_cb) {
+            _beep_cb(1000, 500); // Disarm sound
+        }
+
+        if (was_active) {
+            transmitResolution();
+        }
+    } else if (_state == SosState::ACTIVE_BEACONING) {
+        // Transition into secure disarm countdown (same interval as arming)
+        _state = SosState::DISARM_COUNTDOWN;
+        _disarm_start_ms = 0;
+        _last_disarm_beep_sec = 0;
+
+        if (_beep_cb) {
+            _beep_cb(3000, 150); // Initial descending start tone
+        }
     }
-    (void)reason;
 }
 
 uint32_t SosT1000e::getRemainingCountdownSec() const {
     if (_state != SosState::ARMED_COUNTDOWN || _countdown_start_ms == 0) {
         return 0;
     }
-    return _config.countdown_seconds - _last_beep_sec;
+    if (_config.countdown_seconds > _last_beep_sec) {
+        return _config.countdown_seconds - _last_beep_sec;
+    }
+    return 0;
+}
+
+uint32_t SosT1000e::getRemainingDisarmSec() const {
+    if (_state != SosState::DISARM_COUNTDOWN || _disarm_start_ms == 0) {
+        return 0;
+    }
+    if (_config.countdown_seconds > _last_disarm_beep_sec) {
+        return _config.countdown_seconds - _last_disarm_beep_sec;
+    }
+    return 0;
 }
 
 void SosT1000e::update(uint32_t now_ms) {
@@ -180,6 +244,11 @@ void SosT1000e::update(uint32_t now_ms) {
         if (now_ms - _last_beacon_ms >= interval_ms) {
             transmitSosBeacon(now_ms);
         }
+    } else if (_state == SosState::DISARM_COUNTDOWN) {
+        if (_disarm_start_ms == 0) {
+            _disarm_start_ms = now_ms;
+        }
+        processDisarmCountdown(now_ms);
     }
 }
 
@@ -190,7 +259,7 @@ void SosT1000e::processCountdown(uint32_t now_ms) {
     if (elapsed_sec > _last_beep_sec) {
         _last_beep_sec = elapsed_sec;
         if (_beep_cb && elapsed_sec <= _config.countdown_seconds) {
-            // Escalating beeps as countdown progresses
+            // Escalating beeps as arming countdown progresses (1500Hz -> 3000Hz)
             uint32_t freq = 1500 + (elapsed_sec * 100);
             _beep_cb(freq, 100);
         }
@@ -203,19 +272,63 @@ void SosT1000e::processCountdown(uint32_t now_ms) {
     }
 }
 
+void SosT1000e::processDisarmCountdown(uint32_t now_ms) {
+    uint32_t elapsed_ms = now_ms - _disarm_start_ms;
+    uint32_t elapsed_sec = elapsed_ms / 1000;
+
+    if (elapsed_sec > _last_disarm_beep_sec) {
+        _last_disarm_beep_sec = elapsed_sec;
+        if (_beep_cb && elapsed_sec <= _config.countdown_seconds) {
+            // Descending reverse tones (opposite of arming countdown, 3000Hz -> 1400Hz)
+            uint32_t freq = 3000;
+            if (elapsed_sec * 100 < 1600) {
+                freq = 3000 - (elapsed_sec * 100);
+            } else {
+                freq = 1400;
+            }
+            _beep_cb(freq, 100);
+        }
+    }
+
+    if (elapsed_sec >= _config.countdown_seconds) {
+        // Countdown reached zero -> deactivation confirmed!
+        _state = SosState::RESOLVED;
+        _disarm_start_ms = 0;
+        _last_disarm_beep_sec = 0;
+
+        if (_sfx_cb) {
+            _sfx_cb(SosSoundEffect::COMPLETED_FANFARE);
+        } else if (_beep_cb) {
+            _beep_cb(1046, 200);
+        }
+
+        transmitResolution();
+    }
+}
+
 void SosT1000e::transmitSosBeacon(uint32_t now_ms) {
     _last_beacon_ms = now_ms;
     _beacons_sent++;
 
+    char time_str[16];
+    if (_current_time_sec > 0) {
+        uint32_t day_sec = _current_time_sec % 86400;
+        uint32_t hour = day_sec / 3600;
+        uint32_t min = (day_sec % 3600) / 60;
+        snprintf(time_str, sizeof(time_str), "%02u:%02u", hour, min);
+    } else {
+        strncpy(time_str, "--:--", sizeof(time_str));
+    }
+
     char buffer[256];
     if (_has_gps_fix) {
         snprintf(buffer, sizeof(buffer),
-                 "🚨 SOS: %s | Loc: %.5f,%.5f | Batt: %u%% | https://maps.google.com/?q=%.5f,%.5f",
-                 _config.custom_message, _lat, _lon, _battery_pct, _lat, _lon);
+                 "🚨 [SOS] %s | Loc: %.5f,%.5f | Alt: %.0fm | Ora: %s | Batt: %u%% | https://maps.google.com/?q=%.5f,%.5f",
+                 _config.custom_message, _lat, _lon, (double)_altitude, time_str, _battery_pct, _lat, _lon);
     } else {
         snprintf(buffer, sizeof(buffer),
-                 "🚨 SOS: %s | Loc: NO-GPS-FIX | Batt: %u%%",
-                 _config.custom_message, _battery_pct);
+                 "🚨 [SOS] %s | Loc: NO-GPS-FIX | Ora: %s | Batt: %u%%",
+                 _config.custom_message, time_str, _battery_pct);
     }
 
     // 1. Broadcast to emergency channel (e.g. #sos)
@@ -240,21 +353,34 @@ void SosT1000e::transmitSosBeacon(uint32_t now_ms) {
         }
     }
 
-    if (_beep_cb) {
-        // Confirmation burst on TX
-        _beep_cb(2800, 200);
+    if (_sfx_cb) {
+        // Radar ping acoustic emulation
+        _sfx_cb(SosSoundEffect::RADAR_PING);
+    } else if (_beep_cb) {
+        _beep_cb(2800, 150);
     }
 }
 
 void SosT1000e::transmitResolution() {
+    char time_str[16];
+    if (_current_time_sec > 0) {
+        uint32_t day_sec = _current_time_sec % 86400;
+        uint32_t hour = day_sec / 3600;
+        uint32_t min = (day_sec % 3600) / 60;
+        snprintf(time_str, sizeof(time_str), "%02u:%02u", hour, min);
+    } else {
+        strncpy(time_str, "--:--", sizeof(time_str));
+    }
+
     char buffer[256];
     if (_has_gps_fix) {
         snprintf(buffer, sizeof(buffer),
-                 "✅ SOS-RESOLVED: Emergency cleared | Loc: %.5f,%.5f",
-                 _lat, _lon);
+                 "✅ [SOS-RESOLVED] Emergency cleared | Loc: %.5f,%.5f | Alt: %.0fm | Ora: %s",
+                 _lat, _lon, (double)_altitude, time_str);
     } else {
         snprintf(buffer, sizeof(buffer),
-                 "✅ SOS-RESOLVED: Emergency cleared");
+                 "✅ [SOS-RESOLVED] Emergency cleared | Ora: %s",
+                 time_str);
     }
 
     if (_send_cb) {

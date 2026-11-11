@@ -461,17 +461,21 @@ void setup() {
   ro_mesh::SosT1000e::instance().init();
   ro_mesh::SosT1000e::instance().setSendCallback([](const char* channel, const char* target_contact, const char* message) {
     uint32_t now_ts = rtc_clock.getCurrentTimeUnique();
-    Serial.printf("[SOS TX] Target: %s | Msg: %s\n", channel ? channel : (target_contact ? target_contact : "None"), message);
+    const char* my_name = the_mesh.getNodePrefs()->node_name;
+    Serial.printf("[SOS TX] Target: %s | From: %s | Msg: %s\n", channel ? channel : (target_contact ? target_contact : "None"), my_name, message);
 
     if (channel && strlen(channel) > 0) {
       ChannelDetails ch;
       for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
         if (the_mesh.getChannel(i, ch) && strcasecmp(ch.name, channel) == 0) {
-          // 1. Transmit over LoRa RF broadcast to mesh
-          the_mesh.sendGroupMessage(now_ts, ch.channel, the_mesh.getNodePrefs()->node_name, message, strlen(message));
+          // 1. Transmit over LoRa RF broadcast to mesh with my_name
+          the_mesh.sendGroupMessage(now_ts, ch.channel, my_name, message, strlen(message));
 
           // 2. Local loopback injection so companion app displays it in channel chat
-          RoMeshCompanionHelper::injectChannelMessage(ch.channel, message);
+          // Prepend my_name so MeshCore companion app formats the node's name as sender
+          char full_channel_msg[384];
+          snprintf(full_channel_msg, sizeof(full_channel_msg), "%s: %s", my_name, message);
+          RoMeshCompanionHelper::injectChannelMessage(ch.channel, full_channel_msg);
           break;
         }
       }
@@ -486,6 +490,49 @@ void setup() {
         }
       }
     }
+  });
+
+  ro_mesh::SosT1000e::instance().setSoundEffectCallback([](ro_mesh::SosSoundEffect sfx) {
+  #if defined(PIN_BUZZER)
+    #if defined(PIN_BUZZER_EN) && (PIN_BUZZER_EN >= 0)
+      digitalWrite(PIN_BUZZER_EN, HIGH);
+    #endif
+
+    switch (sfx) {
+      case ro_mesh::SosSoundEffect::RADAR_PING:
+        // Radar acoustic ping: dual-chirp ping (2800 Hz + 2100 Hz echo)
+        tone(PIN_BUZZER, 2800, 60);
+        delay(70);
+        tone(PIN_BUZZER, 2100, 80);
+        delay(90);
+        break;
+
+      case ro_mesh::SosSoundEffect::DISARM_ABORTED:
+        // High alert warning tone: 3200 Hz for 150 ms
+        tone(PIN_BUZZER, 3200, 150);
+        delay(160);
+        break;
+
+      case ro_mesh::SosSoundEffect::COMPLETED_FANFARE:
+        // Positive completed sound (melodic ascending triad C6 -> E6 -> G6 -> C7)
+        tone(PIN_BUZZER, 1046, 70); // C6
+        delay(85);
+        tone(PIN_BUZZER, 1318, 70); // E6
+        delay(85);
+        tone(PIN_BUZZER, 1568, 70); // G6
+        delay(85);
+        tone(PIN_BUZZER, 2093, 160); // C7
+        delay(180);
+        break;
+
+      default:
+        break;
+    }
+
+    #if defined(PIN_BUZZER_EN) && (PIN_BUZZER_EN >= 0)
+      digitalWrite(PIN_BUZZER_EN, LOW);
+    #endif
+  #endif
   });
 
   ro_mesh::SosT1000e::instance().setBeepCallback([](uint32_t freq_hz, uint32_t duration_ms) {
@@ -541,6 +588,7 @@ void loop() {
 
     ro_mesh::SosT1000e::instance().updateGps(sensors.node_lat, sensors.node_lon, sensors.node_altitude, has_gps);
     ro_mesh::SosT1000e::instance().updateBattery(batt_pct);
+    ro_mesh::SosT1000e::instance().updateTime(rtc_clock.getCurrentTime(), the_mesh.getNodePrefs()->tz_offset);
 
     ro_mesh::CliAssistant::instance().setBattery(batt_pct, batt_volts);
     ro_mesh::CliAssistant::instance().setGps(sensors.node_lat, sensors.node_lon, sensors.node_altitude, has_gps, 0);
