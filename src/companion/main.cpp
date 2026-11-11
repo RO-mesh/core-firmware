@@ -2,6 +2,16 @@
 #include <Mesh.h>
 #include "MyMesh.h"
 
+// -------------------------------------------------------------
+// RO-mesh Companion Extensions
+// -------------------------------------------------------------
+#include "../ro_mesh/companion/RomanianChannels.h"
+#include "../ro_mesh/companion/CliContact.h"
+#include "../ro_mesh/companion/CliAssistant.h"
+#include "../ro_mesh/companion/SosT1000e.h"
+#include "../ro_mesh/companion/TelemetryBeacon.h"
+#include "../ro_mesh/companion/MessageStorage.h"
+
 // Believe it or not, this std C function is busted on some platforms!
 static uint32_t _atoi(const char* sp) {
   uint32_t n = 0;
@@ -15,6 +25,82 @@ static uint32_t _atoi(const char* sp) {
 // interface manager
 #include <helpers/MultiSerialInterface.h>
 MultiSerialInterface interface_manager;
+
+class RoMeshSerialProxy : public BaseSerialInterface {
+  BaseSerialInterface* _underlying = nullptr;
+
+public:
+  void setUnderlying(BaseSerialInterface* underlying) {
+    _underlying = underlying;
+  }
+
+  void enable() override {
+    if (_underlying) _underlying->enable();
+  }
+
+  void disable() override {
+    if (_underlying) _underlying->disable();
+  }
+
+  bool isEnabled() const override {
+    return _underlying && _underlying->isEnabled();
+  }
+
+  bool isConnected() const override {
+    return _underlying && _underlying->isConnected();
+  }
+
+  void loop() override {
+    if (_underlying) _underlying->loop();
+  }
+
+  bool isWriteBusy() const override {
+    return _underlying && _underlying->isWriteBusy();
+  }
+
+  size_t writeFrame(const uint8_t src[], size_t len) override {
+    if (!_underlying) return 0;
+    return _underlying->writeFrame(src, len);
+  }
+
+  size_t checkRecvFrame(uint8_t dest[]) override {
+    if (!_underlying) return 0;
+
+    size_t len = _underlying->checkRecvFrame(dest);
+    if (len <= 0) return 0;
+
+    // Intercept CMD_SEND_TXT_MSG (0x02) to virtual System contact
+    // Format: [0]=0x02, [1]=txt_type, [2]=attempt, [3..6]=timestamp, [7..12]=pub_key_prefix(6), [13..]=text
+    if (dest[0] == 2 && len >= 14) {
+      const uint8_t* pub_key_prefix = &dest[7];
+      if (memcmp(pub_key_prefix, ro_mesh::SYSTEM_VIRTUAL_PUBKEY, 6) == 0) {
+        char text_buf[160];
+        size_t tlen = len - 13;
+        if (tlen > sizeof(text_buf) - 1) tlen = sizeof(text_buf) - 1;
+        memcpy(text_buf, &dest[13], tlen);
+        text_buf[tlen] = '\0';
+
+        // Immediately acknowledge frame so app shows message sent
+        uint8_t out_frame[10];
+        out_frame[0] = 6; // RESP_CODE_SENT
+        out_frame[1] = 0; // direct
+        uint32_t expected_ack = 0;
+        uint32_t est_timeout = 50;
+        memcpy(&out_frame[2], &expected_ack, 4);
+        memcpy(&out_frame[6], &est_timeout, 4);
+        _underlying->writeFrame(out_frame, 10);
+
+        // Execute via CliAssistant
+        ro_mesh::CliAssistant::instance().handleMessage(ro_mesh::SYSTEM_VIRTUAL_PUBKEY, false, text_buf);
+
+        return 0; // Consumed
+      }
+    }
+
+    return len;
+  }
+};
+static RoMeshSerialProxy serial_proxy;
 
 // include bluetooth interface
 #if defined(BLE_PIN_CODE)
@@ -71,19 +157,21 @@ StdRNG fast_rng;
 SimpleMeshTables tables;
 MyMesh the_mesh(radio_driver, fast_rng, rtc_clock, tables, store);
 
+class RoMeshCompanionHelper : public MyMesh {
+public:
+  static void injectSystemMessage(const ContactInfo& from, const char* text) {
+    mesh::Packet dummy_pkt;
+    memset(&dummy_pkt, 0, sizeof(dummy_pkt));
+    uint32_t now_ts = rtc_clock.getCurrentTimeUnique();
+    static_cast<RoMeshCompanionHelper&>(the_mesh).queueMessage(from, TXT_TYPE_PLAIN, &dummy_pkt, now_ts, NULL, 0, text);
+  }
+};
+
+static uint32_t s_buzzer_off_ms = 0;
+
 void halt() {
   while (1) ;
 }
-
-// -------------------------------------------------------------
-// RO-mesh Companion Extensions
-// -------------------------------------------------------------
-#include "../ro_mesh/companion/RomanianChannels.h"
-#include "../ro_mesh/companion/CliContact.h"
-#include "../ro_mesh/companion/CliAssistant.h"
-#include "../ro_mesh/companion/SosT1000e.h"
-#include "../ro_mesh/companion/TelemetryBeacon.h"
-#include "../ro_mesh/companion/MessageStorage.h"
 
 void setup() {
   Serial.begin(115200);
@@ -126,6 +214,33 @@ void setup() {
   the_mesh.begin();
 #endif
 
+  // -------------------------------------------------------------
+  // Ensure Virtual System Contact & Default Romanian Channels
+  // -------------------------------------------------------------
+  ContactInfo* sys_contact = the_mesh.lookupContactByPubKey(ro_mesh::SYSTEM_VIRTUAL_PUBKEY, PUB_KEY_SIZE);
+  if (!sys_contact) {
+    ContactInfo sys;
+    memset(&sys, 0, sizeof(ContactInfo));
+    memcpy(sys.id.pub_key, ro_mesh::SYSTEM_VIRTUAL_PUBKEY, PUB_KEY_SIZE);
+    strncpy(sys.name, "System", sizeof(sys.name) - 1);
+    sys.type = 1; // ADV_TYPE_CHAT
+    sys.flags = 0x01 | 0x10; // favorite + remote CLI allowed
+    sys.out_path_len = 0; // direct local interface
+    sys.lastmod = 1;
+    the_mesh.addContact(sys);
+    store.saveContacts(&the_mesh);
+  }
+
+#ifdef MAX_GROUP_CHANNELS
+  ChannelDetails ch;
+  if (!the_mesh.getChannel(0, ch)) {
+    the_mesh.addChannel("#romania", "iLDLz3P0uM9sQKWjoO7DjQ==");
+    the_mesh.addChannel("#sos", "lehpzs+tiL86CmVmy99vpg==");
+    the_mesh.addChannel("#alerte", "2bIin6HPy1yM5u5lZ1VJDQ==");
+    store.saveChannels(&the_mesh);
+  }
+#endif
+
 #ifdef BLE_PIN_CODE
   if (the_mesh.getNodePrefs()->ble_pin == 0) {
     the_mesh.setBLEPin(BLE_PIN_CODE);
@@ -146,7 +261,8 @@ void setup() {
   interface_manager.addInterface(InterfaceType::USB, &usb_serial_interface);
 #endif
 
-  the_mesh.startInterface(interface_manager);
+  serial_proxy.setUnderlying(&interface_manager);
+  the_mesh.startInterface(serial_proxy);
   sensors.begin();
 
 #if ENV_INCLUDE_GPS == 1
@@ -204,21 +320,26 @@ void setup() {
     ro_mesh::MessageStorage::instance().addMessage(
       ro_mesh::SYSTEM_VIRTUAL_PUBKEY, "System", is_channel ? "CLI" : "", message, false, millis() / 1000
     );
+
+    ContactInfo* sys = the_mesh.lookupContactByPubKey(ro_mesh::SYSTEM_VIRTUAL_PUBKEY, PUB_KEY_SIZE);
+    if (sys) {
+      RoMeshCompanionHelper::injectSystemMessage(*sys, message);
+    }
   });
 
   ro_mesh::SosT1000e::instance().init();
   ro_mesh::SosT1000e::instance().setSendCallback([](const char* channel, const char* target_contact, const char* message) {
     Serial.printf("[SOS BROADCAST] %s: %s\n", channel ? channel : "Direct", message);
   });
+
   ro_mesh::SosT1000e::instance().setBeepCallback([](uint32_t freq_hz, uint32_t duration_ms) {
   #if defined(PIN_BUZZER) && defined(PIN_BUZZER_EN) && (PIN_BUZZER_EN >= 0)
     digitalWrite(PIN_BUZZER_EN, HIGH);
     tone(PIN_BUZZER, freq_hz, duration_ms);
-    delay(duration_ms);
-    digitalWrite(PIN_BUZZER_EN, LOW);
+    s_buzzer_off_ms = millis() + duration_ms;
   #elif defined(PIN_BUZZER)
     tone(PIN_BUZZER, freq_hz, duration_ms);
-    delay(duration_ms);
+    s_buzzer_off_ms = millis() + duration_ms;
   #endif
   });
 
@@ -252,7 +373,18 @@ void loop() {
   ro_mesh::SosT1000e::instance().update(now_ms);
   ro_mesh::TelemetryBeacon::instance().update(now_ms);
 
-  if (!the_mesh.hasPendingWork()) {
+  // Non-blocking buzzer auto-shutoff
+  if (s_buzzer_off_ms > 0 && now_ms >= s_buzzer_off_ms) {
+  #if defined(PIN_BUZZER)
+    noTone(PIN_BUZZER);
+  #endif
+  #if defined(PIN_BUZZER_EN) && (PIN_BUZZER_EN >= 0)
+    digitalWrite(PIN_BUZZER_EN, LOW);
+  #endif
+    s_buzzer_off_ms = 0;
+  }
+
+  if (!the_mesh.hasPendingWork() && s_buzzer_off_ms == 0) {
 #if defined(NRF52_PLATFORM)
     board.sleep(0); // nrf ignores seconds param, sleeps whenever possible
 #endif

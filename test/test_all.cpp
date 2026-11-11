@@ -305,7 +305,29 @@ void run_test_sos_and_cli() {
     assert(SosT1000e::instance().isArmed() == true);
     assert(SosT1000e::instance().getState() == SosState::ARMED_COUNTDOWN);
 
-    // 5-second long hold gesture to cancel/disarm
+    // Cancel via second double-click
+    t += 500;
+    SosT1000e::instance().onButtonEvent(true, t);       // Cancel Click 1 down
+    t += 100;
+    SosT1000e::instance().onButtonEvent(false, t);      // Cancel Click 1 up
+    t += 150;
+    SosT1000e::instance().onButtonEvent(true, t);       // Cancel Click 2 down
+    t += 100;
+    SosT1000e::instance().onButtonEvent(false, t);      // Cancel Click 2 up
+    assert(SosT1000e::instance().getState() == SosState::RESOLVED);
+
+    // Re-arm via double click to test long-press fallback cancellation
+    t += 1000;
+    SosT1000e::instance().onButtonEvent(true, t);       // Click 1 down
+    t += 100;
+    SosT1000e::instance().onButtonEvent(false, t);      // Click 1 up
+    t += 150;
+    SosT1000e::instance().onButtonEvent(true, t);       // Click 2 down
+    t += 100;
+    SosT1000e::instance().onButtonEvent(false, t);      // Click 2 up
+    assert(SosT1000e::instance().isArmed() == true);
+
+    // 5-second long hold gesture to cancel/disarm (safety fallback)
     t += 1000;
     SosT1000e::instance().onButtonEvent(true, t);       // Hold down
     t += 5100;                                         // 5.1s later

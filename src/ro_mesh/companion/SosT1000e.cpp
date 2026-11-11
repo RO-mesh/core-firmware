@@ -104,10 +104,12 @@ void SosT1000e::onButtonEvent(bool is_pressed, uint32_t now_ms) {
             }
             _last_click_ms = now_ms;
 
-            // Double click triggers arming if idle
+            // Double click toggles SOS: trigger when Idle/Resolved, cancel when Armed/Active
             if (_click_count == 2) {
                 if (_state == SosState::IDLE || _state == SosState::RESOLVED) {
                     triggerManualSos("Double-click gesture");
+                } else if (_state == SosState::ARMED_COUNTDOWN || _state == SosState::ACTIVE_BEACONING) {
+                    cancelSos("Double-click cancel gesture");
                 }
                 _click_count = 0;
             }
