@@ -92,6 +92,7 @@ flowchart TD
 | Environment | Board / Target | MCU | Radio / FEM | Role |
 | :--- | :--- | :--- | :--- | :--- |
 | `t1000e_companion` | Seeed SenseCAP T1000-E | Nordic nRF52840 | Semtech LR1110 (LoRa + GNSS + Wi-Fi sniffer) | Mobile Companion / SOS / GPS |
+| `t1000e_repeater` | Seeed SenseCAP T1000-E | Nordic nRF52840 | Semtech LR1110 | Airborne Repeater (Balloon / Drone) |
 | `heltec_v3_repeater` | Heltec LoRa32 V3 | ESP32-S3 | Semtech SX1262 (Standard, up to +22 dBm) | Stationary Infrastructure Repeater |
 | `rak_1w_repeater` | RAK4631 + RAK13300 | Nordic nRF52840 | SX1262 + Skyworks PA (+14 dB gain, 1000mW) | High-Power Backbone Repeater |
 | `tbeam_1w_repeater` | LilyGo T-Beam 1W | ESP32-S3 | SX1262 + High-Power PA (+10 dB gain, 1000mW) | High-Power Backbone Repeater |
@@ -248,6 +249,9 @@ cd core-firmware
 
 # Build Seeed SenseCAP T1000-E Companion
 pio run -e t1000e_companion
+
+# Build Seeed SenseCAP T1000-E Repeater (Drone / Balloon)
+pio run -e t1000e_repeater
 
 # Build Heltec LoRa32 V3 Repeater
 pio run -e heltec_v3_repeater

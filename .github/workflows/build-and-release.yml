@@ -61,6 +61,7 @@ jobs:
       matrix:
         environment:
           - t1000e_companion
+          - t1000e_repeater
           - heltec_v3_repeater
           - rak_1w_repeater
           - tbeam_1w_repeater
@@ -93,20 +94,29 @@ jobs:
       - name: Stage Artifacts
         run: |
           mkdir -p artifacts
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          elif [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            VERSION="${{ github.event.inputs.tag_name }}"
+          else
+            VERSION=$(git describe --tags --always 2>/dev/null || echo "v0.1.0-alpha.1")
+          fi
+          echo "Packaging artifacts with version: $VERSION"
+
           if [ -f .pio/build/${{ matrix.environment }}/firmware-merged.bin ]; then
-            cp .pio/build/${{ matrix.environment }}/firmware-merged.bin artifacts/RO-mesh-${{ matrix.environment }}-merged.bin
+            cp .pio/build/${{ matrix.environment }}/firmware-merged.bin artifacts/Core-Firmware-${{ matrix.environment }}-${VERSION}-merged.bin
           fi
           if [ -f .pio/build/${{ matrix.environment }}/firmware.bin ]; then
-            cp .pio/build/${{ matrix.environment }}/firmware.bin artifacts/RO-mesh-${{ matrix.environment }}.bin
+            cp .pio/build/${{ matrix.environment }}/firmware.bin artifacts/Core-Firmware-${{ matrix.environment }}-${VERSION}.bin
           fi
           if [ -f .pio/build/${{ matrix.environment }}/firmware.hex ]; then
-            cp .pio/build/${{ matrix.environment }}/firmware.hex artifacts/RO-mesh-${{ matrix.environment }}.hex
+            cp .pio/build/${{ matrix.environment }}/firmware.hex artifacts/Core-Firmware-${{ matrix.environment }}-${VERSION}.hex
           fi
           if [ -f .pio/build/${{ matrix.environment }}/firmware.uf2 ]; then
-            cp .pio/build/${{ matrix.environment }}/firmware.uf2 artifacts/RO-mesh-${{ matrix.environment }}.uf2
+            cp .pio/build/${{ matrix.environment }}/firmware.uf2 artifacts/Core-Firmware-${{ matrix.environment }}-${VERSION}.uf2
           fi
           if [ -f .pio/build/${{ matrix.environment }}/firmware.zip ]; then
-            cp .pio/build/${{ matrix.environment }}/firmware.zip artifacts/RO-mesh-${{ matrix.environment }}.zip
+            cp .pio/build/${{ matrix.environment }}/firmware.zip artifacts/Core-Firmware-${{ matrix.environment }}-${VERSION}.zip
           fi
           ls -la artifacts/
 

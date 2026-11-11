@@ -10,4 +10,5 @@ build/
 .idea/
 *.pyc
 __pycache__/
+compile_commands.json
 
