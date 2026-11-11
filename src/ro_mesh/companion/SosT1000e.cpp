@@ -37,7 +37,7 @@ SosT1000e::SosT1000e()
     
     memset(&_config, 0, sizeof(_config));
     strncpy(_config.callsign, "RO-NODE", sizeof(_config.callsign) - 1);
-    strncpy(_config.custom_message, "NEED RESCUE / EMERGENCY ASSISTANCE", sizeof(_config.custom_message) - 1);
+    strncpy(_config.custom_message, "NEED RESCUE", sizeof(_config.custom_message) - 1);
     strncpy(_config.channel, "#sos", sizeof(_config.channel) - 1);
     _config.interval_seconds = 60;
     _config.countdown_seconds = 15;
@@ -389,15 +389,26 @@ void SosT1000e::transmitSosBeacon(uint32_t now_ms) {
         strncpy(time_str, "--:--", sizeof(time_str));
     }
 
+    // Safety truncation for custom message so coordinates and URL are NEVER cut off
+    char safe_msg[28];
+    strncpy(safe_msg, _config.custom_message, sizeof(safe_msg) - 1);
+    safe_msg[sizeof(safe_msg) - 1] = '\0';
+    if (strlen(_config.custom_message) >= sizeof(safe_msg) - 1) {
+        safe_msg[sizeof(safe_msg) - 4] = '.';
+        safe_msg[sizeof(safe_msg) - 3] = '.';
+        safe_msg[sizeof(safe_msg) - 2] = '.';
+        safe_msg[sizeof(safe_msg) - 1] = '\0';
+    }
+
     char buffer[256];
     if (_has_gps_fix) {
         snprintf(buffer, sizeof(buffer),
-                 "🚨 [SOS] %s | Loc: %.5f,%.5f | Alt: %.0fm | Ora: %s | Batt: %u%% | https://maps.google.com/?q=%.5f,%.5f",
-                 _config.custom_message, _lat, _lon, (double)_altitude, time_str, _battery_pct, _lat, _lon);
+                 "🚨 [SOS] %s | Loc: %.5f,%.5f | Alt: %.0fm | Ora: %s | Batt: %u%% | https://www.google.com/?q=%.5f,%.5f",
+                 safe_msg, _lat, _lon, (double)_altitude, time_str, _battery_pct, _lat, _lon);
     } else {
         snprintf(buffer, sizeof(buffer),
                  "🚨 [SOS] %s | Loc: NO-GPS-FIX | Ora: %s | Batt: %u%%",
-                 _config.custom_message, time_str, _battery_pct);
+                 safe_msg, time_str, _battery_pct);
     }
 
     // 1. Broadcast to emergency channel (e.g. #sos)

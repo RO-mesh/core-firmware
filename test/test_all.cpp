@@ -445,7 +445,9 @@ void run_test_sos_and_cli() {
     assert(strstr(g_last_sos_msg, "[SOS]") != nullptr);
     assert(strstr(g_last_sos_msg, "Alt: 650m") != nullptr);
     assert(strstr(g_last_sos_msg, "Ora:") != nullptr);
-    assert(strstr(g_last_sos_msg, "https://maps.google.com") != nullptr);
+    assert(strstr(g_last_sos_msg, "https://www.google.com/?q=") != nullptr);
+    assert(strlen(g_last_sos_msg) <= 135); // Confirmed compact payload
+    assert(strlen(g_last_sos_msg) + 14 <= 160); // Guaranteed to survive sending without truncation
     assert(g_last_sfx == SosSoundEffect::RADAR_PING);
 
     // Test Safe Disarm Guard: initiate deactivation countdown
