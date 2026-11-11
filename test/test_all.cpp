@@ -365,7 +365,7 @@ void run_test_sos_and_cli() {
     SosT1000e::instance().onButtonEvent(false, t);      // Cancel Click 2 up
     assert(SosT1000e::instance().getState() == SosState::RESOLVED);
 
-    // Re-arm via double click to test long-press fallback cancellation
+    // Re-arm via double click to test long-press fallback cancellation with pause
     t += 1000;
     SosT1000e::instance().onButtonEvent(true, t);       // Click 1 down
     t += 100;
@@ -375,15 +375,58 @@ void run_test_sos_and_cli() {
     t += 100;
     SosT1000e::instance().onButtonEvent(false, t);      // Click 2 up
     assert(SosT1000e::instance().isArmed() == true);
+    SosT1000e::instance().update(t);
 
-    // 5-second long hold gesture to cancel/disarm (safety fallback)
-    t += 1000;
-    SosT1000e::instance().onButtonEvent(true, t);       // Hold down
-    t += 5100;                                         // 5.1s later
-    SosT1000e::instance().onButtonEvent(false, t);      // Release
+    // Advance 10 seconds of arming (5 seconds remaining of 15)
+    t += 10000;
+    SosT1000e::instance().update(t);
+    assert(SosT1000e::instance().isArmed() == true);
+    assert(SosT1000e::instance().isActive() == false);
 
-    // Verify disarmed
+    // At second 10, start holding button to disarm -> MUST PAUSE ARMING!
+    SosT1000e::instance().onButtonEvent(true, t);       // Hold down starts at 10s mark
+    assert(SosT1000e::instance().isArmingPaused() == true);
+
+    // Advance time by 6 seconds (reaching t = 16s, which would have fired SOS at 15s if not paused!)
+    t += 6000;
+    SosT1000e::instance().update(t);
+
+    // Continuous 5s hold must have triggered cancellation to RESOLVED without ever entering ACTIVE_BEACONING!
     assert(SosT1000e::instance().getState() == SosState::RESOLVED);
+    assert(SosT1000e::instance().isActive() == false);
+    assert(g_last_sfx == SosSoundEffect::COMPLETED_FANFARE);
+
+    // Button released
+    SosT1000e::instance().onButtonEvent(false, t);
+    assert(SosT1000e::instance().getState() == SosState::RESOLVED);
+
+    // Test double-click pause and cancel near the end of countdown
+    t += 1000;
+    SosT1000e::instance().triggerManualSos("CLI");
+    assert(SosT1000e::instance().isArmed() == true);
+    SosT1000e::instance().update(t);
+
+    // Advance to second 13 (2s left of 15s)
+    t += 13000;
+    SosT1000e::instance().update(t);
+    assert(SosT1000e::instance().isArmed() == true);
+
+    // Click 1 down -> pause arming!
+    SosT1000e::instance().onButtonEvent(true, t);
+    assert(SosT1000e::instance().isArmingPaused() == true);
+    t += 100;
+    SosT1000e::instance().onButtonEvent(false, t);
+    assert(SosT1000e::instance().isArmingPaused() == true);
+
+    // 400ms later (t = 13.5s) -> Click 2
+    t += 400;
+    SosT1000e::instance().onButtonEvent(true, t);
+    t += 100;
+    SosT1000e::instance().onButtonEvent(false, t);
+
+    // Double-click cancels arming cleanly
+    assert(SosT1000e::instance().getState() == SosState::RESOLVED);
+    assert(SosT1000e::instance().isActive() == false);
 
     // Trigger SOS via CLI and simulate countdown expiry
     SosT1000e::instance().triggerManualSos("CLI");

@@ -46,6 +46,7 @@ public:
     SosState getState() const { return _state; }
     bool isActive() const { return _state == SosState::ACTIVE_BEACONING; }
     bool isArmed() const { return _state == SosState::ARMED_COUNTDOWN; }
+    bool isArmingPaused() const { return _is_arming_paused; }
     bool isDisarming() const { return _state == SosState::DISARM_COUNTDOWN; }
     uint32_t getRemainingCountdownSec() const;
     uint32_t getRemainingDisarmSec() const;
@@ -96,6 +97,9 @@ private:
     // Countdown and beacon timing
     uint32_t _countdown_start_ms;
     uint32_t _last_beep_sec;
+    bool _is_arming_paused;
+    uint32_t _arming_remaining_ms;
+    bool _hold_triggered;
     uint32_t _disarm_start_ms;
     uint32_t _last_disarm_beep_sec;
     uint32_t _last_beacon_ms;

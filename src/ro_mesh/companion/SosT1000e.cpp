@@ -18,6 +18,9 @@ SosT1000e::SosT1000e()
       _click_count(0),
       _countdown_start_ms(0),
       _last_beep_sec(0),
+      _is_arming_paused(false),
+      _arming_remaining_ms(0),
+      _hold_triggered(false),
       _disarm_start_ms(0),
       _last_disarm_beep_sec(0),
       _last_beacon_ms(0),
@@ -49,6 +52,9 @@ void SosT1000e::init() {
     _disarm_start_ms = 0;
     _last_beep_sec = 0;
     _last_disarm_beep_sec = 0;
+    _is_arming_paused = false;
+    _arming_remaining_ms = 0;
+    _hold_triggered = false;
 }
 
 void SosT1000e::setCallsign(const char* callsign) {
@@ -112,12 +118,14 @@ void SosT1000e::onButtonEvent(bool is_pressed, uint32_t now_ms) {
     if (is_pressed && !_button_last_state) {
         // Button press transition
         _press_start_ms = now_ms;
+        _hold_triggered = false;
 
         // If currently in DISARM countdown, pressing any button immediately aborts deactivation!
         if (_state == SosState::DISARM_COUNTDOWN) {
             _state = SosState::ACTIVE_BEACONING;
             _disarm_start_ms = 0;
             _last_disarm_beep_sec = 0;
+            _last_beacon_ms = now_ms; // Reset beacon timer to avoid immediate burst
             if (_sfx_cb) {
                 _sfx_cb(SosSoundEffect::DISARM_ABORTED);
             } else if (_beep_cb) {
@@ -127,37 +135,57 @@ void SosT1000e::onButtonEvent(bool is_pressed, uint32_t now_ms) {
             _button_last_state = is_pressed;
             return;
         }
+
+        // If currently in ARMED countdown, freeze/pause countdown immediately on press!
+        if (_state == SosState::ARMED_COUNTDOWN && !_is_arming_paused) {
+            _is_arming_paused = true;
+            uint32_t total_ms = _config.countdown_seconds * 1000;
+            uint32_t elapsed_ms = (now_ms > _countdown_start_ms && _countdown_start_ms > 0) ? (now_ms - _countdown_start_ms) : 0;
+            _arming_remaining_ms = (total_ms > elapsed_ms) ? (total_ms - elapsed_ms) : 0;
+        }
     } else if (!is_pressed && _button_last_state) {
         // Button release transition
-        uint32_t duration = now_ms - _press_start_ms;
-
-        // Long press check (>= 5000ms) initiates cancellation/disarm
-        if (duration >= 5000) {
-            if (_state == SosState::ARMED_COUNTDOWN) {
-                cancelSos("5-second hardware hold gesture", true);
-            } else if (_state == SosState::ACTIVE_BEACONING) {
-                cancelSos("5-second hardware hold gesture", false);
-            }
+        if (_hold_triggered) {
+            // Already handled by active hold check in update()
+            _hold_triggered = false;
             _click_count = 0;
-        } else if (duration >= 80 && duration < 800) {
-            // Debounced valid short click
-            if (now_ms - _last_click_ms < 600) {
-                _click_count++;
-            } else {
-                _click_count = 1;
-            }
-            _last_click_ms = now_ms;
+        } else {
+            uint32_t duration = now_ms - _press_start_ms;
 
-            // Double click toggles SOS: trigger when Idle/Resolved, cancel when Armed/Active
-            if (_click_count == 2) {
-                if (_state == SosState::IDLE || _state == SosState::RESOLVED) {
-                    triggerManualSos("Double-click gesture");
-                } else if (_state == SosState::ARMED_COUNTDOWN) {
-                    cancelSos("Double-click cancel gesture", true);
-                } else if (_state == SosState::ACTIVE_BEACONING) {
-                    cancelSos("Double-click cancel gesture", false);
+            if (duration >= 80 && duration < 800) {
+                // Debounced valid short click
+                if (now_ms - _last_click_ms < 600) {
+                    _click_count++;
+                } else {
+                    _click_count = 1;
                 }
-                _click_count = 0;
+                _last_click_ms = now_ms;
+
+                // Double click toggles SOS: trigger when Idle/Resolved, cancel when Armed/Active
+                if (_click_count == 2) {
+                    if (_state == SosState::IDLE || _state == SosState::RESOLVED) {
+                        triggerManualSos("Double-click gesture");
+                    } else if (_state == SosState::ARMED_COUNTDOWN) {
+                        cancelSos("Double-click cancel gesture", true);
+                        _is_arming_paused = false;
+                    } else if (_state == SosState::ACTIVE_BEACONING) {
+                        cancelSos("Double-click cancel gesture", false);
+                    }
+                    _click_count = 0;
+                }
+            } else if (duration >= 800) {
+                // Button released after long non-click tap but before 5000ms hold
+                if (_state == SosState::ARMED_COUNTDOWN && _is_arming_paused) {
+                    _is_arming_paused = false;
+                    uint32_t total_ms = _config.countdown_seconds * 1000;
+                    if (total_ms > _arming_remaining_ms) {
+                        _countdown_start_ms = now_ms - (total_ms - _arming_remaining_ms);
+                        _last_beep_sec = (total_ms - _arming_remaining_ms) / 1000;
+                    } else {
+                        _countdown_start_ms = now_ms;
+                        _last_beep_sec = 0;
+                    }
+                }
             }
         }
     }
@@ -170,6 +198,9 @@ void SosT1000e::triggerManualSos(const char* /*reason*/) {
     _countdown_start_ms = 0; // Will be set in update()
     _last_beep_sec = 0;
     _beacons_sent = 0;
+    _is_arming_paused = false;
+    _arming_remaining_ms = 0;
+    _hold_triggered = false;
 
     if (_beep_cb) {
         _beep_cb(2000, 300); // Initial warning tone
@@ -180,6 +211,9 @@ void SosT1000e::cancelSos(const char* /*reason*/, bool force_instant) {
     if (_state == SosState::IDLE || _state == SosState::RESOLVED) {
         return;
     }
+
+    _is_arming_paused = false;
+    _arming_remaining_ms = 0;
 
     if (force_instant || _state == SosState::ARMED_COUNTDOWN) {
         bool was_active = (_state == SosState::ACTIVE_BEACONING || _state == SosState::DISARM_COUNTDOWN);
@@ -209,8 +243,14 @@ void SosT1000e::cancelSos(const char* /*reason*/, bool force_instant) {
 }
 
 uint32_t SosT1000e::getRemainingCountdownSec() const {
-    if (_state != SosState::ARMED_COUNTDOWN || _countdown_start_ms == 0) {
+    if (_state != SosState::ARMED_COUNTDOWN) {
         return 0;
+    }
+    if (_is_arming_paused) {
+        return (_arming_remaining_ms + 999) / 1000;
+    }
+    if (_countdown_start_ms == 0) {
+        return _config.countdown_seconds;
     }
     if (_config.countdown_seconds > _last_beep_sec) {
         return _config.countdown_seconds - _last_beep_sec;
@@ -229,16 +269,45 @@ uint32_t SosT1000e::getRemainingDisarmSec() const {
 }
 
 void SosT1000e::update(uint32_t now_ms) {
-    // Timeout click count if no subsequent click arrived
-    if (_click_count > 0 && (now_ms - _last_click_ms > 700)) {
-        _click_count = 0;
+    // 1. Continuous active hold check (triggers immediately when 5000ms is reached)
+    if (_button_last_state && !_hold_triggered) {
+        uint32_t hold_duration = now_ms - _press_start_ms;
+        if (hold_duration >= 5000) {
+            _hold_triggered = true;
+            _click_count = 0;
+            if (_state == SosState::ARMED_COUNTDOWN) {
+                cancelSos("5-second hardware hold gesture", true);
+            } else if (_state == SosState::ACTIVE_BEACONING) {
+                cancelSos("5-second hardware hold gesture", false);
+            }
+        }
     }
 
+    // 2. Timeout click count if no subsequent click arrived
+    if (_click_count > 0 && (now_ms - _last_click_ms > 700)) {
+        _click_count = 0;
+        // If arming was paused waiting for potential double-click, and button is released, resume arming
+        if (_state == SosState::ARMED_COUNTDOWN && _is_arming_paused && !_button_last_state) {
+            _is_arming_paused = false;
+            uint32_t total_ms = _config.countdown_seconds * 1000;
+            if (total_ms > _arming_remaining_ms) {
+                _countdown_start_ms = now_ms - (total_ms - _arming_remaining_ms);
+                _last_beep_sec = (total_ms - _arming_remaining_ms) / 1000;
+            } else {
+                _countdown_start_ms = now_ms;
+                _last_beep_sec = 0;
+            }
+        }
+    }
+
+    // 3. State machine progression
     if (_state == SosState::ARMED_COUNTDOWN) {
         if (_countdown_start_ms == 0) {
             _countdown_start_ms = now_ms;
         }
-        processCountdown(now_ms);
+        if (!_is_arming_paused) {
+            processCountdown(now_ms);
+        }
     } else if (_state == SosState::ACTIVE_BEACONING) {
         uint32_t interval_ms = _config.interval_seconds * 1000;
         if (now_ms - _last_beacon_ms >= interval_ms) {
