@@ -32,14 +32,19 @@ jobs:
       - name: Compile and Run Native Test Runner
         run: |
           mkdir -p build
-          g++ -std=c++17 -D TESTING -I src -I src/ro_mesh \
+          g++ -std=c++17 -w \
+            -I test \
+            -I src \
+            -I src/ro_mesh \
+            -I lib/MeshCore/src \
             test/test_all.cpp \
+            test/mock_region_map.cpp \
             src/ro_mesh/regions/AutomaticRegions.cpp \
-            src/ro_mesh/filter/QuarantineEngine.cpp \
-            src/ro_mesh/filter/FilterEngine.cpp \
-            src/ro_mesh/filter/BatteryGate.cpp \
             src/ro_mesh/hal/AutomaticTiers.cpp \
             src/ro_mesh/hal/GainEngine.cpp \
+            src/ro_mesh/filter/QuarantineEngine.cpp \
+            src/ro_mesh/filter/BatteryGate.cpp \
+            src/ro_mesh/filter/FilterEngine.cpp \
             src/ro_mesh/switcher/RomanianPresets.cpp \
             src/ro_mesh/switcher/PresetEngine.cpp \
             src/ro_mesh/advert/SmartAdverts.cpp \
