@@ -29,9 +29,26 @@ static char g_last_system_msg[512] = {0};
 static char g_last_sos_msg[512] = {0};
 static char g_last_sos_channel[64] = {0};
 static char g_last_telemetry_msg[512] = {0};
+static char g_accumulated_system_msg[2048] = {0};
+static int g_system_msg_count = 0;
 
 static void testInjectSystemMessage(const uint8_t* /*target_id*/, bool /*is_channel*/, const char* message) {
     strncpy(g_last_system_msg, message, sizeof(g_last_system_msg) - 1);
+    strncat(g_accumulated_system_msg, message, sizeof(g_accumulated_system_msg) - strlen(g_accumulated_system_msg) - 1);
+    strncat(g_accumulated_system_msg, "\n", sizeof(g_accumulated_system_msg) - strlen(g_accumulated_system_msg) - 1);
+    g_system_msg_count++;
+}
+
+static bool testFallbackCliHandler(const char* command, char* reply, size_t max_len) {
+    if (strcmp(command, "get radio") == 0) {
+        strncpy(reply, "> 869.618,62.500,8,5", max_len - 1);
+        return true;
+    }
+    if (strncmp(command, "set name ", 9) == 0) {
+        strncpy(reply, "OK", max_len - 1);
+        return true;
+    }
+    return false;
 }
 
 static void testSendSosPacket(const char* channel, const char* target_contact, const char* message) {
@@ -265,21 +282,46 @@ void run_test_sos_and_cli() {
 
     // 2. Automated Welcome Message Verification
     CliAssistant::instance().sendWelcomeNotice();
-    assert(strstr(g_last_system_msg, "Welcome to RO-mesh") != nullptr);
-    assert(strstr(g_last_system_msg, "/help") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "Welcome to RO-mesh") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "/help") != nullptr);
 
-    // 3. Channel CLI Slash Commands (Zero Airtime Interception)
-    // /help
+    // 3. Channel CLI Slash Commands & Paginated Help Verification
+    g_accumulated_system_msg[0] = '\0';
+    g_system_msg_count = 0;
     bool handled_help = CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/help");
     assert(handled_help == true);
-    assert(strstr(g_last_system_msg, "/status") != nullptr);
-    assert(strstr(g_last_system_msg, "/sos") != nullptr);
+    assert(g_system_msg_count > 1); // Confirmed split into multiple [1/X] chunks
+    assert(strstr(g_accumulated_system_msg, "[1/") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "/status") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "get radio") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "set radio") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "set name") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "reboot") != nullptr);
+
+    // 4. Native Companion CLI Delegation (get & set commands)
+    CliAssistant::instance().setFallbackHandler(testFallbackCliHandler);
+
+    // Test native "get radio"
+    bool handled_get_radio = CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "get radio");
+    assert(handled_get_radio == true);
+    assert(strstr(g_last_system_msg, "869.618") != nullptr);
+
+    // Test slash-prefixed "/get radio"
+    bool handled_slash_radio = CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/get radio");
+    assert(handled_slash_radio == true);
+    assert(strstr(g_last_system_msg, "869.618") != nullptr);
+
+    // Test native "set name"
+    bool handled_set_name = CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "set name MyNode");
+    assert(handled_set_name == true);
+    assert(strstr(g_last_system_msg, "OK") != nullptr);
 
     // /status
+    g_accumulated_system_msg[0] = '\0';
     bool handled_status = CliAssistant::instance().handleMessage(SYSTEM_VIRTUAL_PUBKEY, false, "/status");
     assert(handled_status == true);
-    assert(strstr(g_last_system_msg, "RO-mesh Status") != nullptr);
-    assert(strstr(g_last_system_msg, "#ro") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "RO-mesh Status") != nullptr);
+    assert(strstr(g_accumulated_system_msg, "#ro") != nullptr);
 
     // /battery
     CliAssistant::instance().setBattery(85, 3.95f);

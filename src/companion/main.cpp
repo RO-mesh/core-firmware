@@ -80,15 +80,32 @@ public:
         memcpy(text_buf, &dest[13], tlen);
         text_buf[tlen] = '\0';
 
-        // Immediately acknowledge frame so app shows message sent
+        // Calculate deterministic expected_ack for this message
+        uint32_t expected_ack = 0;
+        uint8_t temp[5 + 160];
+        memcpy(temp, &dest[3], 4); // timestamp
+        temp[4] = dest[2] & 3;     // attempt
+        memcpy(&temp[5], &dest[13], tlen);
+        mesh::Utils::sha256((uint8_t*)&expected_ack, 4, temp, 5 + tlen, ro_mesh::SYSTEM_VIRTUAL_PUBKEY, PUB_KEY_SIZE);
+        if (expected_ack == 0) expected_ack = 0xA1B2C3D4;
+
+        // 1. Send RESP_CODE_SENT (0x06) with expected_ack
         uint8_t out_frame[10];
         out_frame[0] = 6; // RESP_CODE_SENT
         out_frame[1] = 0; // direct
-        uint32_t expected_ack = 0;
-        uint32_t est_timeout = 50;
+        uint32_t est_timeout = 100;
         memcpy(&out_frame[2], &expected_ack, 4);
         memcpy(&out_frame[6], &est_timeout, 4);
         _underlying->writeFrame(out_frame, 10);
+
+        // 2. Immediately send PUSH_CODE_SEND_CONFIRMED (0x82) to confirm delivery to app
+        // This stops the official MeshCore app from retrying 8 times!
+        uint8_t ack_frame[9];
+        ack_frame[0] = 0x82; // PUSH_CODE_SEND_CONFIRMED
+        memcpy(&ack_frame[1], &expected_ack, 4);
+        uint32_t trip_time = 10; // 10 ms trip time
+        memcpy(&ack_frame[5], &trip_time, 4);
+        _underlying->writeFrame(ack_frame, 9);
 
         // Execute via CliAssistant
         ro_mesh::CliAssistant::instance().handleMessage(ro_mesh::SYSTEM_VIRTUAL_PUBKEY, false, text_buf);
@@ -325,6 +342,94 @@ void setup() {
     if (sys) {
       RoMeshCompanionHelper::injectSystemMessage(*sys, message);
     }
+  });
+
+  ro_mesh::CliAssistant::instance().setFallbackHandler([](const char* command, char* reply, size_t max_len) -> bool {
+    while (*command == ' ') command++;
+
+    // Radio prefs: get/set radio, get/set af, get/set dutycycle, get/set tx, etc.
+    if (the_mesh.getNodePrefs()->getRadioPrefs()->handleCommand(command, 0, reply)) {
+      if (the_mesh.getNodePrefs()->getRadioPrefs()->isDirty()) {
+        the_mesh.savePrefs();
+      }
+      return true;
+    }
+
+    // Board hardware specific commands
+    if (board.handleCommand(command, 0, reply)) {
+      if (the_mesh.getNodePrefs()->isDirty()) {
+        the_mesh.savePrefs();
+      }
+      return true;
+    }
+
+    if (strcmp(command, "reboot") == 0) {
+      board.reboot();
+      return true;
+    }
+
+    if (strcmp(command, "poweroff") == 0 || strcmp(command, "shutdown") == 0) {
+      board.powerOff();
+      return true;
+    }
+
+    if (memcmp(command, "set name ", 9) == 0) {
+      if (AdvertDataParser::isValidName(&command[9])) {
+        StrHelper::strncpy(the_mesh.getNodePrefs()->node_name, &command[9], sizeof(the_mesh.getNodePrefs()->node_name));
+        the_mesh.savePrefs();
+        strcpy(reply, "OK");
+      } else {
+        strcpy(reply, "Error, bad chars");
+      }
+      return true;
+    }
+
+    if (strcmp(command, "get name") == 0) {
+      snprintf(reply, max_len, "> %s", the_mesh.getNodePrefs()->node_name);
+      return true;
+    }
+
+    if (memcmp(command, "set pin ", 8) == 0) {
+      the_mesh.getNodePrefs()->ble_pin = atoi(&command[8]);
+      the_mesh.savePrefs();
+      snprintf(reply, max_len, "> pin is now %06d", (int)the_mesh.getNodePrefs()->ble_pin);
+      return true;
+    }
+
+    if (strcmp(command, "get pin") == 0) {
+      snprintf(reply, max_len, "> %06d", (int)the_mesh.getNodePrefs()->ble_pin);
+      return true;
+    }
+
+    if (strcmp(command, "board") == 0) {
+      strncpy(reply, board.getManufacturerName(), max_len - 1);
+      reply[max_len - 1] = '\0';
+      return true;
+    }
+
+    if (strcmp(command, "ver") == 0) {
+      snprintf(reply, max_len, "%s (Build: %s)", FIRMWARE_VERSION, FIRMWARE_BUILD_DATE);
+      return true;
+    }
+
+    if (strcmp(command, "get tz.offset") == 0) {
+      snprintf(reply, max_len, "> %d", the_mesh.getNodePrefs()->tz_offset);
+      return true;
+    }
+
+    if (memcmp(command, "set tz.offset ", 14) == 0) {
+      int8_t tz = atof(&command[14]);
+      if (tz < -12 || tz > 14) {
+        strcpy(reply, "Error, must be from -12 to +14");
+      } else {
+        the_mesh.getNodePrefs()->tz_offset = tz;
+        the_mesh.savePrefs();
+        strcpy(reply, "OK");
+      }
+      return true;
+    }
+
+    return false;
   });
 
   ro_mesh::SosT1000e::instance().init();

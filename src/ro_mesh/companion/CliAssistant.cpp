@@ -18,6 +18,7 @@ CliAssistant& CliAssistant::instance() {
 
 CliAssistant::CliAssistant()
     : _inject_cb(nullptr),
+      _fallback_cb(nullptr),
       _welcome_sent(false),
       _battery_pct(100),
       _battery_volts(4.12f),
@@ -88,8 +89,41 @@ void CliAssistant::postSystemNotification(const char* message, const uint8_t* de
 }
 
 void CliAssistant::sendReply(const uint8_t* dest, bool is_ch, const char* reply) {
-    if (_inject_cb) {
+    if (!_inject_cb || !reply) return;
+
+    size_t total_len = strlen(reply);
+    const size_t CHUNK_SIZE = 115; // Safe payload length leaving room for [1/X] prefix
+
+    if (total_len <= 130) {
         _inject_cb(dest, is_ch, reply);
+        return;
+    }
+
+    // Split reply into chunks
+    char chunks[10][140];
+    int count = 0;
+    const char* p = reply;
+
+    while (*p && count < 10) {
+        size_t rem = strlen(p);
+        size_t take = (rem > CHUNK_SIZE) ? CHUNK_SIZE : rem;
+        if (take < rem) {
+            // Find natural breakpoint (newline or space)
+            size_t b = take;
+            while (b > 20 && p[b] != '\n' && p[b] != ' ') b--;
+            if (b > 20) take = b;
+        }
+        memcpy(chunks[count], p, take);
+        chunks[count][take] = '\0';
+        p += take;
+        while (*p == '\n' || *p == ' ') p++;
+        count++;
+    }
+
+    for (int i = 0; i < count; i++) {
+        char formatted[160];
+        snprintf(formatted, sizeof(formatted), "[%d/%d] %s", i + 1, count, chunks[i]);
+        _inject_cb(dest, is_ch, formatted);
     }
 }
 
@@ -103,42 +137,71 @@ void CliAssistant::executeCommand(const char* cmd_line, const uint8_t* destinati
     const char* p = cmd_line;
     if (*p == '/') p++;
 
-    if (strncasecmp(p, "help", 4) == 0 || strcmp(p, "?") == 0 || strlen(p) == 0) {
+    if (strcasecmp(p, "help") == 0 || strcmp(p, "?") == 0 || strlen(p) == 0) {
         cmdHelp(target, is_channel);
-    } else if (strncasecmp(p, "status", 6) == 0) {
+    } else if (strcasecmp(p, "status") == 0) {
         cmdStatus(target, is_channel);
-    } else if (strncasecmp(p, "tier", 4) == 0) {
+    } else if (strncasecmp(p, "tier", 4) == 0 && (p[4] == '\0' || p[4] == ' ')) {
         cmdTier(p + 4, target, is_channel);
-    } else if (strncasecmp(p, "sos", 3) == 0) {
+    } else if (strncasecmp(p, "sos", 3) == 0 && (p[3] == '\0' || p[3] == ' ')) {
         cmdSos(p + 3, target, is_channel);
-    } else if (strncasecmp(p, "telemetry", 9) == 0) {
+    } else if (strncasecmp(p, "telemetry", 9) == 0 && (p[9] == '\0' || p[9] == ' ')) {
         cmdTelemetry(p + 9, target, is_channel);
-    } else if (strncasecmp(p, "battery", 7) == 0) {
+    } else if (strcasecmp(p, "battery") == 0) {
         cmdBattery(target, is_channel);
-    } else if (strncasecmp(p, "gps", 3) == 0) {
+    } else if (strcasecmp(p, "gps") == 0) {
         cmdGps(target, is_channel);
-    } else if (strncasecmp(p, "pa", 2) == 0) {
+    } else if (strcasecmp(p, "pa") == 0) {
         cmdPa(target, is_channel);
-    } else if (strncasecmp(p, "info", 4) == 0) {
+    } else if (strcasecmp(p, "info") == 0) {
         cmdInfo(target, is_channel);
     } else {
-        char err[128];
-        snprintf(err, sizeof(err), "❓ Unknown command: '%s'\nType /help to see all available commands.", cmd_line);
+        // Not a built-in RO-mesh command -> try fallback handler (native MeshCore handleCommand)
+        if (_fallback_cb) {
+            char reply[256];
+            reply[0] = '\0';
+            // Try without slash (e.g. "get radio", "set name ...")
+            if (_fallback_cb(p, reply, sizeof(reply))) {
+                sendReply(target, is_channel, reply);
+                return;
+            }
+            // If that fails and original had a slash, try original
+            if (p != cmd_line && _fallback_cb(cmd_line, reply, sizeof(reply))) {
+                sendReply(target, is_channel, reply);
+                return;
+            }
+        }
+
+        char err[160];
+        snprintf(err, sizeof(err), "❓ Comandă necunoscută: '%s'\nTastați /help pentru lista completă de comenzi (RO-mesh & get/set).", cmd_line);
         sendReply(target, is_channel, err);
     }
 }
 
 void CliAssistant::cmdHelp(const uint8_t* dest, bool is_ch) {
     const char* help_text = 
-        "🔧 RO-mesh Companion Commands:\n"
-        "• /status - Battery, GPS, Tier, and PA limiter\n"
-        "• /tier [0-3|auto|off] - Delay tier configuration\n"
-        "• /sos [trigger|cancel|status] - Emergency beacon\n"
-        "• /telemetry [on|off|status] - Telemetry beacon\n"
-        "• /battery - Voltage & charge state\n"
-        "• /gps - Current coordinates & satellites\n"
-        "• /pa - PA limiter & RF power clamp\n"
-        "• /info - Firmware version & scope (#ro)";
+        "🔧 Comenzi RO-mesh:\n"
+        "• /status - Stare nod, baterie, GPS, Tier, PA\n"
+        "• /tier [0-3|auto|off] - Configurare profil timing\n"
+        "• /sos [trigger|cancel|status] - Baliză urgență\n"
+        "• /telemetry [on|off|status] - Telemetrie GPS\n"
+        "• /battery - Nivel baterie și tensiune\n"
+        "• /gps - Coordonate curente și sateliți\n"
+        "• /pa - Limită putere și amplificare PA\n"
+        "• /info - Versiune firmware și domeniu (#ro)\n"
+        "📡 Comenzi Radio & Rețea (get/set):\n"
+        "• get radio / set radio <freq> <bw> <sf> <cr>\n"
+        "• get freq / get af / set af <factor>\n"
+        "• get dutycycle / set dutycycle <procent>\n"
+        "• get tx / set tx <putere_dBm>\n"
+        "⚙️ Comenzi Nod & Sistem (get/set):\n"
+        "• get name / set name <nume_nod>\n"
+        "• get pin / set pin <cod_pin>\n"
+        "• get tz.offset / set tz.offset <ore>\n"
+        "• board - Model hardware\n"
+        "• ver - Versiune nucleu MeshCore\n"
+        "• reboot - Repornire dispozitiv\n"
+        "• poweroff / shutdown - Oprire dispozitiv";
     sendReply(dest, is_ch, help_text);
 }
 

@@ -11,12 +11,16 @@ namespace ro_mesh {
 // is_channel: true if target is a channel hash, false if target is a 32-byte contact pubkey
 typedef void (*InjectSystemMessageCallback)(const uint8_t* target_id, bool is_channel, const char* message);
 
+// Callback type to delegate native MeshCore companion CLI commands
+typedef bool (*FallbackCliHandler)(const char* command, char* reply, size_t max_len);
+
 class CliAssistant {
 public:
     static CliAssistant& instance();
 
     void init();
     void setInjectCallback(InjectSystemMessageCallback cb) { _inject_cb = cb; }
+    void setFallbackHandler(FallbackCliHandler cb) { _fallback_cb = cb; }
 
     // Interception hook for incoming/outgoing messages
     // Returns true if the message was intercepted locally and should NOT be transmitted over RF
@@ -51,6 +55,7 @@ private:
     void sendReply(const uint8_t* dest, bool is_ch, const char* reply);
 
     InjectSystemMessageCallback _inject_cb;
+    FallbackCliHandler _fallback_cb;
     bool _welcome_sent;
 
     uint8_t _battery_pct;
