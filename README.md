@@ -275,6 +275,17 @@ pio run -e tbeam_1w_repeater
 
 ### 2. Flashing to Hardware
 
+#### A. WebSerial & Browser Flashers (Recommended for Quick Setup)
+* **ESP32 / ESP32-S3 (Heltec V3, T-Beam 1W)**: Flash the `-factory.bin` file at offset `0x0000` via [ESP Web Flasher](https://espressif.github.io/esptool-js/) or WebSerial.
+* **Nordic nRF52840 (Seeed T1000-E, RAK4631)**: Upload the `-dfu.zip` package via browser DFU flashers (Meshtastic Web Flasher, Adafruit WebSerial DFU, nRF Connect).
+  > ⚠️ **Important**: Browser flashers require the `-dfu.zip` package (which contains `manifest.json`). Do not feed a `.uf2` file into a web flasher, or it will fail with `Error: End of central directory not found`.
+
+#### B. Mass Storage Drag & Drop (Nordic nRF52840)
+* Connect the device to your computer via USB.
+* Double-click the physical button / reset pin until the device mounts as a virtual USB drive (e.g. `T1000-E` or `RAK4631`).
+* Drag & drop the `.uf2` file directly onto the drive. The device will automatically flash and reboot.
+
+#### C. Command Line & PlatformIO
 ```bash
 # Upload to connected board via serial (e.g. Heltec V3)
 pio run -e heltec_v3_repeater -t upload

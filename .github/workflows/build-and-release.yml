@@ -116,17 +116,17 @@ jobs:
             cp .pio/build/${{ matrix.environment }}/firmware.bin artifacts/primary/${SLUG}-core-firmware-${VERSION}-update.bin
           fi
 
-          # nRF52 targets produce primary UF2
+          # nRF52 targets produce primary UF2 (Drag & Drop) and DFU zip (Web Flashers)
           if [ -f .pio/build/${{ matrix.environment }}/firmware.uf2 ]; then
             cp .pio/build/${{ matrix.environment }}/firmware.uf2 artifacts/primary/${SLUG}-core-firmware-${VERSION}.uf2
+          fi
+          if [ -f .pio/build/${{ matrix.environment }}/firmware.zip ]; then
+            cp .pio/build/${{ matrix.environment }}/firmware.zip artifacts/primary/${SLUG}-core-firmware-${VERSION}-dfu.zip
           fi
 
           # Developer tools (hex, zip packages) stored for the all-in-one tools bundle
           if [ -f .pio/build/${{ matrix.environment }}/firmware.hex ]; then
             cp .pio/build/${{ matrix.environment }}/firmware.hex artifacts/tools/${SLUG}-core-firmware-${VERSION}.hex
-          fi
-          if [ -f .pio/build/${{ matrix.environment }}/firmware.zip ]; then
-            cp .pio/build/${{ matrix.environment }}/firmware.zip artifacts/tools/${SLUG}-core-firmware-${VERSION}.zip
           fi
 
           echo "Primary staged assets:"
@@ -180,9 +180,9 @@ jobs:
           echo "Contains all compiled firmwares and developer packages:" >> bundle_staging/README.txt
           echo "- *-factory.bin : Complete flash image (@ 0x0000) for ESP32 / ESP32-S3 devices" >> bundle_staging/README.txt
           echo "- *-update.bin  : Application partition for Over-The-Air (OTA) firmware updates" >> bundle_staging/README.txt
+          echo "- *-dfu.zip     : Nordic DFU package for WebSerial flashers (Meshtastic/Adafruit Web)" >> bundle_staging/README.txt
           echo "- *.uf2         : Drag-and-drop firmware for Nordic nRF52840 mass storage bootloader" >> bundle_staging/README.txt
           echo "- *.hex         : Intel HEX binary for J-Link / OpenOCD / hardware programmers" >> bundle_staging/README.txt
-          echo "- *.zip         : DFU update packages for nRF Connect / command-line tools" >> bundle_staging/README.txt
 
 
           # Create the all-in-one tools archive (alphabetically sorts to the bottom)
